@@ -1,5 +1,7 @@
 # Behavioral Fraud Detection POC
 
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+
 ## Mục đích
 
 POC app Android giả lập luồng chuyển khoản ngân hàng, thu thập behavioral data (touch, sensor, text input, clipboard) từ client, gửi lên LLM (OpenRouter) để phân tích và trả về risk score.
