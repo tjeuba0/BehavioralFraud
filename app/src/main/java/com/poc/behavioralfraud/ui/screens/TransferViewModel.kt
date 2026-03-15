@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.poc.behavioralfraud.data.collector.BehavioralCollector
 import com.poc.behavioralfraud.data.model.*
 import com.poc.behavioralfraud.data.repository.ProfileRepository
+import com.poc.behavioralfraud.data.scorer.LocalScorer
 import com.poc.behavioralfraud.network.OpenRouterClient
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -35,6 +36,7 @@ class TransferViewModel(application: Application) : AndroidViewModel(application
     val collector = BehavioralCollector(application)
     private val repository = ProfileRepository(application)
     private val llmClient = OpenRouterClient()
+    private val localScorer = LocalScorer()
 
     private val _uiState = MutableStateFlow<TransferUiState>(TransferUiState.Idle)
     val uiState: StateFlow<TransferUiState> = _uiState.asStateFlow()
@@ -108,7 +110,13 @@ class TransferViewModel(application: Application) : AndroidViewModel(application
                     val profile = repository.getProfile()
                         ?: throw Exception("No profile found. Please re-enroll.")
 
-                    val result = llmClient.verifyTransaction(features, profile)
+                    val result = try {
+                        llmClient.verifyTransaction(features, profile)
+                    } catch (e: Exception) {
+                        // Fallback to local Z-score scoring when LLM API is unavailable
+                        val enrollmentFeatures = repository.getEnrollmentFeaturesList()
+                        localScorer.score(features, profile, enrollmentFeatures)
+                    }
                     _uiState.value = TransferUiState.VerificationResult(
                         result = result,
                         features = features
