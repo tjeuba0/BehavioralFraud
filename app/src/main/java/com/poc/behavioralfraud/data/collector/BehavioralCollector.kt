@@ -30,6 +30,7 @@ class BehavioralCollector(context: Context) {
     private var sessionId = ""
     private var sessionStartTime = 0L
     private var sessionEndTime = 0L
+    @Volatile
     private var isCollecting = false
 
     // Sensor listener
@@ -69,12 +70,13 @@ class BehavioralCollector(context: Context) {
         sessionStartTime = System.currentTimeMillis()
         isCollecting = true
 
-        // Register sensors with NORMAL delay (200ms) to save battery
+        // Register sensors with GAME delay (~50Hz) for behavioral biometrics
+        // Research shows 20-100 Hz needed for behavioral biometrics (MDPI, Johns Hopkins)
         sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)?.let {
-            sensorManager.registerListener(sensorListener, it, SensorManager.SENSOR_DELAY_NORMAL)
+            sensorManager.registerListener(sensorListener, it, SensorManager.SENSOR_DELAY_GAME)
         }
         sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)?.let {
-            sensorManager.registerListener(sensorListener, it, SensorManager.SENSOR_DELAY_NORMAL)
+            sensorManager.registerListener(sensorListener, it, SensorManager.SENSOR_DELAY_GAME)
         }
 
         navigationEvents.add(
@@ -147,7 +149,8 @@ class BehavioralCollector(context: Context) {
                 previousLength = previousLength,
                 newLength = newLength,
                 lengthDelta = delta,
-                isPaste = delta > 1  // More than 1 char at once = likely paste
+                isPaste = delta >= 3,  // 3+ chars at once = likely paste (avoids autocorrect false positives)
+                isDeletion = delta < 0
             )
         )
     }
@@ -206,12 +209,13 @@ class BehavioralCollector(context: Context) {
         // --- Touch features ---
         val touchSizes = touchEvents.map { it.size.toDouble() }
         val touchDurations = mutableListOf<Long>()
-        val downEvents = touchEvents.filter { it.action == 0 } // ACTION_DOWN
-        val upEvents = touchEvents.filter { it.action == 1 }   // ACTION_UP
+        val downEvents = touchEvents.filter { it.action == 0 }.sortedBy { it.eventTime } // ACTION_DOWN
+        val remainingUpEvents = touchEvents.filter { it.action == 1 }.sortedBy { it.eventTime }.toMutableList() // ACTION_UP
         for (down in downEvents) {
-            val matchingUp = upEvents.firstOrNull { it.eventTime > down.eventTime }
+            val matchingUp = remainingUpEvents.firstOrNull { it.eventTime >= down.eventTime && it.downTime == down.downTime }
             if (matchingUp != null) {
-                touchDurations.add(matchingUp.eventTime - down.downTime)
+                touchDurations.add(matchingUp.eventTime - down.eventTime)
+                remainingUpEvents.remove(matchingUp) // Don't reuse this UP event
             }
         }
 
@@ -237,6 +241,30 @@ class BehavioralCollector(context: Context) {
             val mean = values.average()
             return kotlin.math.sqrt(values.map { (it - mean) * (it - mean) }.average())
         }
+
+        // --- Touch pressure (from touchMajor) ---
+        val touchPressures = touchEvents.map { it.touchMajor.toDouble() }
+        val avgTouchPressure = if (touchPressures.isNotEmpty()) touchPressures.average() else 0.0
+
+        // --- Per-field typing rhythm ---
+        val perFieldAvgDelay = sortedTextEvents
+            .groupBy { it.fieldName }
+            .mapValues { (_, events) ->
+                val delays = events.zipWithNext().map { (a, b) -> b.timestamp - a.timestamp }
+                    .filter { it in 1..5000 }
+                if (delays.isNotEmpty()) delays.average() else 0.0
+            }
+
+        // --- Inter-field hesitation ---
+        val fieldTransitions = sortedTextEvents.zipWithNext()
+            .filter { (a, b) -> a.fieldName != b.fieldName }
+            .map { (a, b) -> b.timestamp - a.timestamp }
+        val avgInterFieldPause = if (fieldTransitions.isNotEmpty()) fieldTransitions.average() else 0.0
+
+        // --- Deletion patterns ---
+        val deletionCount = textChangeEvents.count { it.isDeletion }
+        val deletionRatio = if (textChangeEvents.isNotEmpty())
+            deletionCount.toDouble() / textChangeEvents.size else 0.0
 
         // --- Navigation ---
         val fieldFocusSeq = navigationEvents
@@ -271,6 +299,11 @@ class BehavioralCollector(context: Context) {
             accelStabilityX = stdDev(accelEvents.map { it.x }),
             accelStabilityY = stdDev(accelEvents.map { it.y }),
             accelStabilityZ = stdDev(accelEvents.map { it.z }),
+            avgTouchPressure = avgTouchPressure,
+            perFieldAvgDelay = perFieldAvgDelay,
+            avgInterFieldPauseMs = avgInterFieldPause,
+            deletionCount = deletionCount,
+            deletionRatio = deletionRatio,
             fieldFocusSequence = fieldFocusSeq,
             timeToFirstInput = timeToFirstInput,
             timeFromLastInputToConfirm = timeFromLastInputToConfirm

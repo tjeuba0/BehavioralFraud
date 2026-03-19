@@ -13,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -230,14 +231,11 @@ private fun TransferForm(
             label = { Text("Số tài khoản nhận") },
             placeholder = { Text("Nhập số tài khoản") },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .onFocusChanged { if (it.isFocused) onFieldFocus("accountNumber") },
             singleLine = true
         )
-
-        // Track focus via interaction source
-        LaunchedEffect(accountNumber) {
-            if (accountNumber.isNotEmpty()) onFieldFocus("accountNumber")
-        }
 
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -247,13 +245,11 @@ private fun TransferForm(
             label = { Text("Số tiền (VNĐ)") },
             placeholder = { Text("Nhập số tiền") },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .onFocusChanged { if (it.isFocused) onFieldFocus("amount") },
             singleLine = true
         )
-
-        LaunchedEffect(amount) {
-            if (amount.isNotEmpty()) onFieldFocus("amount")
-        }
 
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -262,13 +258,11 @@ private fun TransferForm(
             onValueChange = onNoteChange,
             label = { Text("Nội dung chuyển khoản") },
             placeholder = { Text("Nhập nội dung") },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .onFocusChanged { if (it.isFocused) onFieldFocus("note") },
             maxLines = 3
         )
-
-        LaunchedEffect(note) {
-            if (note.isNotEmpty()) onFieldFocus("note")
-        }
 
         Spacer(modifier = Modifier.height(32.dp))
 
@@ -462,10 +456,14 @@ private fun VerificationResultView(
                 FeatureRow("Total touch events", "${features.totalTouchEvents}")
                 FeatureRow("Avg touch size", String.format("%.4f", features.avgTouchSize))
                 FeatureRow("Avg touch duration", "${String.format("%.1f", features.avgTouchDurationMs)}ms")
+                FeatureRow("Avg touch pressure", String.format("%.4f", features.avgTouchPressure))
                 FeatureRow("Avg swipe velocity", "${String.format("%.1f", features.avgSwipeVelocity)} px/s")
                 FeatureRow("Gyro stability (X)", String.format("%.6f", features.gyroStabilityX))
                 FeatureRow("Gyro stability (Y)", String.format("%.6f", features.gyroStabilityY))
                 FeatureRow("Gyro stability (Z)", String.format("%.6f", features.gyroStabilityZ))
+                FeatureRow("Inter-field pause", "${String.format("%.0f", features.avgInterFieldPauseMs)}ms")
+                FeatureRow("Deletion count", "${features.deletionCount}")
+                FeatureRow("Deletion ratio", String.format("%.2f", features.deletionRatio))
                 FeatureRow("Field focus", features.fieldFocusSequence)
             }
         }

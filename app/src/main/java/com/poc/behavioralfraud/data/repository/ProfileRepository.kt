@@ -87,12 +87,28 @@ class ProfileRepository(context: Context) {
                 stdInterCharDelay = 0.0,
                 avgTouchSize = 0.0,
                 avgTouchDuration = 0.0,
-                avgGyroStability = 0.0,
-                avgAccelStability = 0.0,
+                avgGyroStabilityX = 0.0,
+                avgGyroStabilityY = 0.0,
+                avgGyroStabilityZ = 0.0,
+                avgAccelStabilityX = 0.0,
+                avgAccelStabilityY = 0.0,
+                avgAccelStabilityZ = 0.0,
+                avgSwipeVelocity = 0.0,
                 avgPasteCount = 0.0,
+                avgTimeToFirstInput = 0.0,
+                avgTimeFromLastInputToConfirm = 0.0,
+                typicalFieldFocusSequence = "",
+                avgTouchPressure = 0.0,
+                avgInterFieldPause = 0.0,
+                avgDeletionRatio = 0.0,
                 profileSummary = "No enrollment data"
             )
         }
+
+        // Find most common field focus sequence
+        val focusSequences = featuresList.map { it.fieldFocusSequence }
+        val typicalSequence = focusSequences.groupBy { it }
+            .maxByOrNull { it.value.size }?.key ?: ""
 
         return BehavioralProfile(
             userId = "default_user",
@@ -102,13 +118,20 @@ class ProfileRepository(context: Context) {
             stdInterCharDelay = featuresList.map { it.stdInterCharDelayMs }.average(),
             avgTouchSize = featuresList.map { it.avgTouchSize }.average(),
             avgTouchDuration = featuresList.map { it.avgTouchDurationMs }.average(),
-            avgGyroStability = featuresList.map {
-                (it.gyroStabilityX + it.gyroStabilityY + it.gyroStabilityZ) / 3.0
-            }.average(),
-            avgAccelStability = featuresList.map {
-                (it.accelStabilityX + it.accelStabilityY + it.accelStabilityZ) / 3.0
-            }.average(),
+            avgGyroStabilityX = featuresList.map { it.gyroStabilityX }.average(),
+            avgGyroStabilityY = featuresList.map { it.gyroStabilityY }.average(),
+            avgGyroStabilityZ = featuresList.map { it.gyroStabilityZ }.average(),
+            avgAccelStabilityX = featuresList.map { it.accelStabilityX }.average(),
+            avgAccelStabilityY = featuresList.map { it.accelStabilityY }.average(),
+            avgAccelStabilityZ = featuresList.map { it.accelStabilityZ }.average(),
+            avgSwipeVelocity = featuresList.map { it.avgSwipeVelocity }.average(),
             avgPasteCount = featuresList.map { it.pasteCount.toDouble() }.average(),
+            avgTimeToFirstInput = featuresList.map { it.timeToFirstInput.toDouble() }.average(),
+            avgTimeFromLastInputToConfirm = featuresList.map { it.timeFromLastInputToConfirm.toDouble() }.average(),
+            typicalFieldFocusSequence = typicalSequence,
+            avgTouchPressure = featuresList.map { it.avgTouchPressure }.average(),
+            avgInterFieldPause = featuresList.map { it.avgInterFieldPauseMs }.average(),
+            avgDeletionRatio = featuresList.map { it.deletionRatio }.average(),
             profileSummary = llmSummary
         )
     }

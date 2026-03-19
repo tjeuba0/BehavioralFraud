@@ -23,7 +23,8 @@ data class TextChangeEvent(
     val previousLength: Int,
     val newLength: Int,
     val lengthDelta: Int,       // newLength - previousLength
-    val isPaste: Boolean        // lengthDelta > 1
+    val isPaste: Boolean,       // lengthDelta >= 3
+    val isDeletion: Boolean     // lengthDelta < 0
 )
 
 /**
@@ -100,6 +101,17 @@ data class BehavioralFeatures(
     val accelStabilityY: Double,
     val accelStabilityZ: Double,
 
+    // Touch pressure
+    val avgTouchPressure: Double,
+
+    // Per-field typing rhythm
+    val perFieldAvgDelay: Map<String, Double>,
+
+    // Hesitation & deletion patterns
+    val avgInterFieldPauseMs: Double,
+    val deletionCount: Int,
+    val deletionRatio: Double,
+
     // Navigation
     val fieldFocusSequence: String,
     val timeToFirstInput: Long,
@@ -128,8 +140,22 @@ data class BehavioralProfile(
     val stdInterCharDelay: Double,
     val avgTouchSize: Double,
     val avgTouchDuration: Double,
-    val avgGyroStability: Double,
-    val avgAccelStability: Double,
+    // Per-axis sensor stability (not collapsed)
+    val avgGyroStabilityX: Double,
+    val avgGyroStabilityY: Double,
+    val avgGyroStabilityZ: Double,
+    val avgAccelStabilityX: Double,
+    val avgAccelStabilityY: Double,
+    val avgAccelStabilityZ: Double,
+    // Previously extracted but not stored
+    val avgSwipeVelocity: Double,
     val avgPasteCount: Double,
+    val avgTimeToFirstInput: Double,
+    val avgTimeFromLastInputToConfirm: Double,
+    val typicalFieldFocusSequence: String,
+    // New features from Phase 2
+    val avgTouchPressure: Double,
+    val avgInterFieldPause: Double,
+    val avgDeletionRatio: Double,
     val profileSummary: String      // LLM-generated summary
 )

@@ -94,7 +94,11 @@ Key indicators of fraud:
 - Gyroscope too stable (device on table = possible RAT/remote control)
 - Paste behavior when user normally types manually
 - Session duration very different from normal
-- Touch size/duration significantly different (different person's fingers)"""
+- Touch size/duration/pressure significantly different (different person's fingers)
+- Field navigation order different from typical pattern
+- Inter-field pause significantly different (fraudsters often move faster between fields)
+- No deletions when user normally makes corrections (copy-paste behavior)
+- Time to first input too short (pre-prepared data)"""
 
         val userPrompt = """## Established Behavioral Profile
 User ID: ${profile.userId}
@@ -106,9 +110,16 @@ Average metrics:
 - Inter-char delay: ${String.format("%.1f", profile.avgInterCharDelay)}ms (std: ${String.format("%.1f", profile.stdInterCharDelay)})
 - Touch size: ${String.format("%.4f", profile.avgTouchSize)}
 - Touch duration: ${String.format("%.1f", profile.avgTouchDuration)}ms
-- Gyro stability: ${String.format("%.6f", profile.avgGyroStability)}
-- Accel stability: ${String.format("%.4f", profile.avgAccelStability)}
+- Touch pressure: ${String.format("%.4f", profile.avgTouchPressure)}
+- Gyro stability: X=${String.format("%.6f", profile.avgGyroStabilityX)}, Y=${String.format("%.6f", profile.avgGyroStabilityY)}, Z=${String.format("%.6f", profile.avgGyroStabilityZ)}
+- Accel stability: X=${String.format("%.4f", profile.avgAccelStabilityX)}, Y=${String.format("%.4f", profile.avgAccelStabilityY)}, Z=${String.format("%.4f", profile.avgAccelStabilityZ)}
+- Swipe velocity: ${String.format("%.1f", profile.avgSwipeVelocity)} px/s
 - Paste count avg: ${String.format("%.1f", profile.avgPasteCount)}
+- Time to first input: ${String.format("%.0f", profile.avgTimeToFirstInput)}ms
+- Time from last input to confirm: ${String.format("%.0f", profile.avgTimeFromLastInputToConfirm)}ms
+- Typical field order: ${profile.typicalFieldFocusSequence}
+- Inter-field pause: ${String.format("%.0f", profile.avgInterFieldPause)}ms
+- Deletion ratio: ${String.format("%.2f", profile.avgDeletionRatio)}
 
 ## Current Session Features
 $featuresJson
