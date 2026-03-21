@@ -11,7 +11,7 @@
 | ID | Feature | SRS | Priority | Status | Dependencies |
 |----|---------|-----|----------|--------|--------------|
 | TASK-001 | BackendClient.kt (thay OpenRouterClient.kt) | FR-CL-01 | P0 | done | BE-API-ready |
-| TASK-002 | Sửa TransferViewModel.kt | FR-CL-02 | P0 | planned | TASK-001 |
+| TASK-002 | Sửa TransferViewModel.kt | FR-CL-02 | P0 | done | TASK-001 |
 | TASK-003 | Xóa API key + xóa OpenRouterClient.kt | FR-CL-03 | P0 | planned | TASK-001 |
 | TASK-004 | Sửa bug ProfileScreen.kt | FR-CL-04 | P1 | planned | none |
 | TASK-005 | Integration test end-to-end | Section 10.3 | P1 | planned | TASK-002, TASK-003, BE-deployed |
@@ -85,7 +85,7 @@ suspend fun getProfile(
 - **SRS section:** FR-CL-02
 - **Branch:** `feat/update-viewmodel`
 - **Dependencies:** TASK-001
-- **Status:** planned
+- **Status:** done
 
 **Goal:** Thay thế các chỗ gọi `llmClient` bằng `backendClient` trong `submitTransfer()`.
 

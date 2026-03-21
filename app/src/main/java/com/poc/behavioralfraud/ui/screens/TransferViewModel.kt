@@ -7,11 +7,13 @@ import com.poc.behavioralfraud.data.collector.BehavioralCollector
 import com.poc.behavioralfraud.data.model.*
 import com.poc.behavioralfraud.data.repository.ProfileRepository
 import com.poc.behavioralfraud.data.scorer.LocalScorer
-import com.poc.behavioralfraud.network.OpenRouterClient
+import com.poc.behavioralfraud.network.BackendClient
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * UI State for the Transfer screen
@@ -35,7 +37,7 @@ class TransferViewModel(application: Application) : AndroidViewModel(application
 
     val collector = BehavioralCollector(application)
     private val repository = ProfileRepository(application)
-    private val llmClient = OpenRouterClient()
+    private val backendClient = BackendClient()
     private val localScorer = LocalScorer()
 
     private val _uiState = MutableStateFlow<TransferUiState>(TransferUiState.Idle)
@@ -70,62 +72,64 @@ class TransferViewModel(application: Application) : AndroidViewModel(application
     }
 
     /**
-     * Submit transfer: stop collection, extract features, call LLM
+     * Submit transfer: stop collection, extract features, call backend
      */
     fun submitTransfer(accountNumber: String, amount: String, note: String) {
         collector.stopSession()
         val features = collector.extractFeatures()
-        val currentCount = repository.getEnrollmentCount()
 
         _uiState.value = TransferUiState.Analyzing
 
         viewModelScope.launch {
-            try {
-                if (currentCount < MIN_ENROLLMENT) {
-                    // ENROLLMENT MODE: build profile
-                    repository.addEnrollmentFeatures(features)
-                    val newCount = repository.getEnrollmentCount()
-                    _enrollmentCount.value = newCount
+            withContext(Dispatchers.IO) {
+                try {
+                    val currentCount = repository.getEnrollmentCount()
+                    if (currentCount < MIN_ENROLLMENT) {
+                        // ENROLLMENT MODE: send session to backend first
+                        val enrollResponse = backendClient.enrollSession("default_user", features)
 
-                    if (newCount >= MIN_ENROLLMENT) {
-                        // Enough enrollments, build profile via LLM
-                        val allFeatures = repository.getEnrollmentFeaturesList()
-                        val summary = llmClient.enrollProfile(allFeatures)
-                        val profile = repository.buildAveragedProfile(summary)
-                        repository.saveProfile(profile)
-                        _profile.value = profile
+                        // Persist locally only after backend confirms receipt
+                        repository.addEnrollmentFeatures(features)
+                        val newCount = repository.getEnrollmentCount()
+                        _enrollmentCount.value = newCount
 
-                        _uiState.value = TransferUiState.EnrollmentComplete(
-                            count = newCount,
-                            message = "Profile đã được tạo thành công!\n\n$summary"
-                        )
+                        if (enrollResponse.status == "completed" && enrollResponse.profile != null) {
+                            // Backend completed profile building
+                            repository.saveProfile(enrollResponse.profile)
+                            _profile.value = enrollResponse.profile
+
+                            _uiState.value = TransferUiState.EnrollmentComplete(
+                                count = enrollResponse.enrollmentCount,
+                                message = "Profile đã được tạo thành công!\n\n${enrollResponse.profileSummary ?: ""}"
+                            )
+                        } else {
+                            _uiState.value = TransferUiState.EnrollmentComplete(
+                                count = newCount,
+                                message = "Enrollment ${newCount}/$MIN_ENROLLMENT hoàn tất.\nCần thêm ${enrollResponse.remaining} lần nữa để tạo profile."
+                            )
+                        }
                     } else {
-                        _uiState.value = TransferUiState.EnrollmentComplete(
-                            count = newCount,
-                            message = "Enrollment ${newCount}/$MIN_ENROLLMENT hoàn tất.\nCần thêm ${MIN_ENROLLMENT - newCount} lần nữa để tạo profile."
+                        // VERIFICATION MODE: compare against profile
+                        val profile = repository.getProfile()
+                            ?: throw Exception("No profile found. Please re-enroll.")
+
+                        val result = try {
+                            backendClient.verifyTransaction("default_user", features, profile)
+                        } catch (e: Exception) {
+                            // Fallback to local Z-score scoring when backend is unavailable
+                            val enrollmentFeatures = repository.getEnrollmentFeaturesList()
+                            localScorer.score(features, profile, enrollmentFeatures)
+                        }
+                        _uiState.value = TransferUiState.VerificationResult(
+                            result = result,
+                            features = features
                         )
                     }
-                } else {
-                    // VERIFICATION MODE: compare against profile
-                    val profile = repository.getProfile()
-                        ?: throw Exception("No profile found. Please re-enroll.")
-
-                    val result = try {
-                        llmClient.verifyTransaction(features, profile)
-                    } catch (e: Exception) {
-                        // Fallback to local Z-score scoring when LLM API is unavailable
-                        val enrollmentFeatures = repository.getEnrollmentFeaturesList()
-                        localScorer.score(features, profile, enrollmentFeatures)
-                    }
-                    _uiState.value = TransferUiState.VerificationResult(
-                        result = result,
-                        features = features
+                } catch (e: Exception) {
+                    _uiState.value = TransferUiState.Error(
+                        "Lỗi: ${e.message ?: "Unknown error"}"
                     )
                 }
-            } catch (e: Exception) {
-                _uiState.value = TransferUiState.Error(
-                    "Lỗi: ${e.message ?: "Unknown error"}"
-                )
             }
         }
     }
