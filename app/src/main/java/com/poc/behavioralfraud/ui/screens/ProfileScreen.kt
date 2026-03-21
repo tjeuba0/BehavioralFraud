@@ -94,14 +94,34 @@ fun ProfileScreen(
                             "Thời gian trung bình mỗi lần chạm"
                         )
                         ProfileMetric(
-                            "Gyro stability",
-                            String.format("%.6f", profile.avgGyroStability),
-                            "Độ ổn định thiết bị (thấp = cầm tay, cao = trên bàn)"
+                            "Gyro stability X",
+                            String.format("%.6f", profile.avgGyroStabilityX),
+                            "Gyroscope X-axis"
                         )
                         ProfileMetric(
-                            "Accel stability",
-                            String.format("%.4f", profile.avgAccelStability),
-                            "Độ rung thiết bị khi thao tác"
+                            "Gyro stability Y",
+                            String.format("%.6f", profile.avgGyroStabilityY),
+                            "Gyroscope Y-axis"
+                        )
+                        ProfileMetric(
+                            "Gyro stability Z",
+                            String.format("%.6f", profile.avgGyroStabilityZ),
+                            "Gyroscope Z-axis"
+                        )
+                        ProfileMetric(
+                            "Accel stability X",
+                            String.format("%.4f", profile.avgAccelStabilityX),
+                            "Accelerometer X-axis"
+                        )
+                        ProfileMetric(
+                            "Accel stability Y",
+                            String.format("%.4f", profile.avgAccelStabilityY),
+                            "Accelerometer Y-axis"
+                        )
+                        ProfileMetric(
+                            "Accel stability Z",
+                            String.format("%.4f", profile.avgAccelStabilityZ),
+                            "Accelerometer Z-axis"
                         )
                         ProfileMetric(
                             "Paste count",

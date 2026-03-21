@@ -119,14 +119,28 @@ data class BehavioralFeatures(
 )
 
 /**
- * LLM analysis result
+ * Fraud analysis result from backend
  */
 data class FraudAnalysisResult(
     val riskScore: Int,             // 0-100
     val riskLevel: String,          // "LOW", "MEDIUM", "HIGH"
     val anomalies: List<String>,
     val explanation: String,
-    val recommendation: String      // "APPROVE", "STEP_UP_AUTH", "BLOCK"
+    val recommendation: String,     // "APPROVE", "STEP_UP_AUTH", "BLOCK"
+    val traceId: String = "",       // Backend trace identifier
+    val model: String = "",         // LLM model used
+    val latencyMs: Int = 0          // Backend processing time (ms)
+)
+
+/**
+ * Enrollment response from backend
+ */
+data class EnrollResponse(
+    val status: String,             // "pending" or "completed"
+    val enrollmentCount: Int,
+    val remaining: Int = 0,
+    val profile: BehavioralProfile? = null,
+    val profileSummary: String? = null
 )
 
 /**

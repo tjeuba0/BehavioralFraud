@@ -30,6 +30,13 @@ android {
             "OPENROUTER_API_KEY",
             "\"${localProperties.getProperty("OPENROUTER_API_KEY", "YOUR_API_KEY_HERE")}\""
         )
+
+        // Backend base URL from local.properties
+        buildConfigField(
+            "String",
+            "BACKEND_BASE_URL",
+            "\"${localProperties.getProperty("BACKEND_BASE_URL", "http://10.0.2.2:8000")}\""
+        )
     }
 
     buildTypes {
@@ -88,6 +95,11 @@ dependencies {
 
     // DataStore for local storage
     implementation("androidx.datastore:datastore-preferences:1.1.1")
+
+    // Test
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
 
     // Debug
     debugImplementation("androidx.compose.ui:ui-tooling")
