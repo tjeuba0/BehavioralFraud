@@ -13,8 +13,8 @@
 | TASK-001 | BackendClient.kt (thay OpenRouterClient.kt) | FR-CL-01 | P0 | done | BE-API-ready |
 | TASK-002 | Sửa TransferViewModel.kt | FR-CL-02 | P0 | done | TASK-001 |
 | TASK-003 | Xóa API key + xóa OpenRouterClient.kt | FR-CL-03 | P0 | done | TASK-001 |
-| TASK-004 | Sửa bug ProfileScreen.kt | FR-CL-04 | P1 | planned | none |
-| TASK-005 | Integration test end-to-end | Section 10.3 | P1 | planned | TASK-002, TASK-003, BE-deployed |
+| TASK-004 | Sửa bug ProfileScreen.kt | FR-CL-04 | P1 | done | none |
+| TASK-005 | Integration test end-to-end | Section 10.3 | P1 | done | TASK-002, TASK-003, BE-deployed |
 
 > **BE-API-ready**: Backend đã có OpenAPI spec hoặc ít nhất POST /risk/score và POST /profile/enroll chạy được.  
 > **BE-deployed**: Backend chạy được (localhost hoặc remote) để Android gọi thật.
@@ -168,7 +168,7 @@ buildConfigField(
 - **SRS section:** FR-CL-04
 - **Branch:** `feat/fix-profile-screen`
 - **Dependencies:** none
-- **Status:** planned
+- **Status:** done
 
 **Goal:** Sửa lỗi tham chiếu thuộc tính không tồn tại trên BehavioralProfile.
 
@@ -216,7 +216,7 @@ ProfileMetric("Gyro stability", String.format("%.6f", avgGyro), "Trung bình 3 t
 - **SRS section:** Section 10.3 (Integration acceptance criteria)
 - **Branch:** `feat/integration-test`
 - **Dependencies:** TASK-002, TASK-003, BE-deployed
-- **Status:** planned
+- **Status:** done
 
 **Goal:** Chạy test end-to-end: Android gọi backend thật, xác nhận toàn bộ flow hoạt động.
 
