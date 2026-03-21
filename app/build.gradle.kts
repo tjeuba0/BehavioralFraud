@@ -24,13 +24,6 @@ android {
         versionCode = 1
         versionName = "1.0-POC"
 
-        // OpenRouter API Key from local.properties
-        buildConfigField(
-            "String",
-            "OPENROUTER_API_KEY",
-            "\"${localProperties.getProperty("OPENROUTER_API_KEY", "YOUR_API_KEY_HERE")}\""
-        )
-
         // Backend base URL from local.properties
         buildConfigField(
             "String",
