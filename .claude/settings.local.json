@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__figma-dev-mode-mcp-server__get_design_context",
+      "mcp__figma-dev-mode-mcp-server__get_metadata",
+      "mcp__figma-dev-mode-mcp-server__get_screenshot",
+      "Bash(python3:*)",
+      "mcp__figma-dev-mode-mcp-server__get_variable_defs",
+      "Bash(which gh:*)",
+      "Bash(APK=\"/Users/vandz/Downloads/app-release 2.apk\" && BT=~/Library/Android/sdk/build-tools/36.0.0 && echo \"=== APK SIGNING VERIFICATION ===\" && \"$BT/apksigner\" verify --verbose --print-certs \"$APK\" 2>&1)",
+      "Bash(APK=\"/Users/vandz/Downloads/app-release 2.apk\" && BT=~/Library/Android/sdk/build-tools/36.0.0 && echo \"=== ZIPALIGN CHECK ===\" && \"$BT/zipalign\" -c -v 4 \"$APK\" 2>&1 | tail -5)",
+      "Bash(APK=\"/Users/vandz/Downloads/app-release 2.apk\" && BT=~/Library/Android/sdk/build-tools/36.0.0 && echo \"=== MANIFEST DUMP ===\" && \"$BT/aapt2\" dump badging \"$APK\" 2>&1)",
+      "Bash(APK=\"/Users/vandz/Downloads/app-release 2.apk\" && echo \"=== ZIPALIGN CHECK ===\" && ~/Library/Android/sdk/build-tools/36.0.0/zipalign -c 4 \"$APK\" 2>&1; echo \"Exit code: $?\")",
+      "Bash('APK=/Users/vandz/Downloads/app-release 2.apk')",
+      "Bash(unzip -l $APK *.dex)",
+      "Bash(unzip -p $APK META-INF/com.android.build.gradle/app-metadata.properties)",
+      "Read(//Users/vandz/MaySach-Android/**)",
+      "Bash(unzip -l \"$APK\" 'lib/*')",
+      "Bash(~/Library/Android/sdk/build-tools/36.0.0/aapt2 dump:*)",
+      "Bash(unzip -l \"/Users/vandz/Downloads/app-release 2.apk\" '*.dex' 2>&1)",
+      "Bash(unzip -l \"/Users/vandz/Downloads/app-release 2.apk\" 'lib/*' 2>&1 | tail -15)",
+      "Bash(unzip -l \"/Users/vandz/Downloads/app-release 2.apk\" 2>&1 | grep -iE '\\(\\\\.pem|\\\\.key|\\\\.cert|\\\\.p12|\\\\.jks|\\\\.keystore|google-services|\\\\.env\\)' | head -10)",
+      "Bash(jarsigner -verify -verbose -certs \"/Users/vandz/Downloads/app-release.aab\" 2>&1 | tail -20)",
+      "Bash(unzip -l \"/Users/vandz/Downloads/app-release.aab\" 2>&1 | grep -iE '\\(\\\\.dex|\\\\.so|\\\\.xml|\\\\.properties|\\\\.pem|\\\\.key|\\\\.cert|\\\\.p12|\\\\.jks|\\\\.keystore|google-services|\\\\.env\\)' | head -30)",
+      "Bash(java -jar ~/Library/Android/sdk/tools/bin/../lib/bundletool-all-*.jar 2>/dev/null || which bundletool 2>/dev/null || echo \"bundletool not found\")",
+      "Bash(bundletool dump:*)",
+      "Bash(jarsigner -verify -verbose \"/Users/vandz/Downloads/app-release.aab\" 2>&1 | grep -E '\\(Digest algorithm|Signature algorithm|signer|Signed by|jar verified|scheme\\)' | head -10)",
+      "Bash(xargs cat:*)",
+      "Bash(cp -r /Users/vandz/MaySach-Android/.claude/ /Users/vandz/BehavioralFraud/.claude/)",
+      "Bash(mkdir -p /Users/vandz/BehavioralFraud/docs)"
+    ]
+  }
+}
