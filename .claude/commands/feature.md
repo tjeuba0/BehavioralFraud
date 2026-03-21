@@ -211,6 +211,17 @@ After implementation, verify the build succeeds. If it fails, fix the errors and
 
 **CRITICAL: The review MUST be independent.** You (the main agent) wrote the code. You MUST NOT review your own code. Use the `Task` tool to spawn a reviewer agent that has NO access to your design decisions or implementation rationale.
 
+**Before spawning reviewer:** Build the scoped diff using ONLY files from this task's "File thay đổi" / "Affected Files":
+```bash
+git diff -- path/to/File1.kt path/to/File2.kt
+```
+For new (untracked) files, include their content as synthetic diff:
+```bash
+git diff -- 
+cat 
+```
+Do NOT pass `git diff` without file arguments — it leaks unrelated changes and causes the reviewer to flag out-of-scope files, creating infinite QC loops.
+
 Spawn a Task agent with this prompt:
 
 > You are an independent code reviewer. You have NO context about WHY the code was written this way.
@@ -227,7 +238,13 @@ Spawn a Task agent with this prompt:
 > If you cannot point a finding to a specific rule in CLAUDE.md or a concrete execution path → it is ℹ️ Info, NOT 🔴 or 🟡.
 >
 > ## Code Changes (diff)
-> [paste the output of `git diff` for all changed files]
+> [paste the output of `git diff` ONLY for files listed in the task's "File thay đổi" / "Affected Files" section]
+>
+> CRITICAL SCOPE RULE:
+> - ONLY review files listed in the current task's "File thay đổi" / "Affected Files" section.
+> - If a file is NOT listed in the task, do NOT review it, even if it appears in `git diff`.
+> - Pre-existing issues in other files are NOT findings for this task.
+> - If you find issues in out-of-scope files, ignore them — they belong to their own task.
 >
 > ## SRS Requirements to Verify
 > [paste REQ-01 through REQ-XX list from Step 2]

@@ -89,6 +89,9 @@ dependencies {
     // DataStore for local storage
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
+    // Test
+    testImplementation("junit:junit:4.13.2")
+
     // Debug
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

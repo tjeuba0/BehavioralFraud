@@ -94,14 +94,34 @@ fun ProfileScreen(
                             "Thời gian trung bình mỗi lần chạm"
                         )
                         ProfileMetric(
-                            "Gyro stability",
-                            String.format("%.6f", profile.avgGyroStability),
-                            "Độ ổn định thiết bị (thấp = cầm tay, cao = trên bàn)"
+                            "Gyro stability X",
+                            String.format("%.6f", profile.avgGyroStabilityX),
+                            "Độ ổn định con quay hồi chuyển trục X"
                         )
                         ProfileMetric(
-                            "Accel stability",
-                            String.format("%.4f", profile.avgAccelStability),
-                            "Độ rung thiết bị khi thao tác"
+                            "Gyro stability Y",
+                            String.format("%.6f", profile.avgGyroStabilityY),
+                            "Độ ổn định con quay hồi chuyển trục Y"
+                        )
+                        ProfileMetric(
+                            "Gyro stability Z",
+                            String.format("%.6f", profile.avgGyroStabilityZ),
+                            "Độ ổn định con quay hồi chuyển trục Z"
+                        )
+                        ProfileMetric(
+                            "Accel stability X",
+                            String.format("%.4f", profile.avgAccelStabilityX),
+                            "Độ rung gia tốc kế trục X"
+                        )
+                        ProfileMetric(
+                            "Accel stability Y",
+                            String.format("%.4f", profile.avgAccelStabilityY),
+                            "Độ rung gia tốc kế trục Y"
+                        )
+                        ProfileMetric(
+                            "Accel stability Z",
+                            String.format("%.4f", profile.avgAccelStabilityZ),
+                            "Độ rung gia tốc kế trục Z"
                         )
                         ProfileMetric(
                             "Paste count",
