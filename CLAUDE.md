@@ -93,7 +93,7 @@ Before researching ANY feature, issue, or bug, ALWAYS read documentation FIRST i
 
 ## Project Overview
 
-**BehavioralFraud** is an Android POC app demonstrating behavioral fraud detection for Vietnamese banking regulation (Nghị định 50 / Thông tư 77). It collects behavioral biometrics (touch, sensor, keystroke rhythm, clipboard) during a mock bank transfer, sends feature vectors to an LLM (OpenRouter) for analysis, and returns a risk score — proving that the same transaction performed by a different person can be detected.
+**BehavioralFraud** is an Android POC app demonstrating behavioral fraud detection for Vietnamese banking regulation (Nghị định 50 / Thông tư 77). It collects behavioral biometrics (touch, sensor, keystroke rhythm, clipboard) during a mock bank transfer, sends feature vectors to a FastAPI backend for analysis, and returns a risk score — proving that the same transaction performed by a different person can be detected.
 
 - **Package**: `com.poc.behavioralfraud`
 - **Language**: Kotlin 1.9.24, JVM 11
@@ -114,10 +114,11 @@ Before researching ANY feature, issue, or bug, ALWAYS read documentation FIRST i
 
 ## Setup Requirements
 
-1. **OpenRouter API Key**: Add to `local.properties` or `gradle.properties`:
+1. **Backend Base URL**: Add to `local.properties`:
    ```properties
-   OPENROUTER_API_KEY=sk-or-v1-xxxxxxxxxxxxxxxxxxxxxxxx
+   BACKEND_BASE_URL=http://10.0.2.2:8000
    ```
+   > `10.0.2.2` is localhost of the host machine when running on Android emulator.
 2. **Test on real device**: Emulator has no real gyroscope/accelerometer — sensor features will be unreliable.
 
 ## Key Documents & Task Registry
@@ -138,9 +139,9 @@ ViewModel (ui/screens/TransferViewModel.kt)
   ↓ calls
 Data Layer (data/collector/, data/repository/, data/scorer/)
   ↓ calls
-Network Layer (network/OpenRouterClient.kt)
+Network Layer (network/BackendClient.kt)
   ↓ HTTPS
-OpenRouter API (LLM — Gemini 2.0 Flash / z-ai/glm-5)
+FastAPI Backend (DSPy → OpenRouter LLM)
 ```
 
 ### Key Directories
@@ -153,7 +154,7 @@ app/src/main/java/com/poc/behavioralfraud/
 │   ├── repository/ProfileRepository.kt  → Stores/loads behavioral profile (DataStore)
 │   └── scorer/LocalScorer.kt            → On-device feature extraction
 ├── network/
-│   └── OpenRouterClient.kt            → OkHttp + Gson client for LLM API
+│   └── BackendClient.kt               → OkHttp + Gson client for FastAPI backend
 ├── ui/
 │   ├── screens/
 │   │   ├── HomeScreen.kt              → Enrollment/Verification entry point
@@ -202,7 +203,7 @@ Home → Profile (view stored behavioral profile)
 | Feature Vector | Extracted numeric behavioral metrics sent to LLM |
 | BehavioralCollector | Class that intercepts touch/text/sensor events |
 | LocalScorer | Feature extractor: converts raw events → feature vector |
-| OpenRouterClient | HTTP client that calls LLM API via OpenRouter |
+| BackendClient | HTTP client that sends features to FastAPI backend |
 
 ## Behavioral Features Collected
 
@@ -359,13 +360,13 @@ fun ResultScreen(
 // ✅ CORRECT
 viewModelScope.launch {
     withContext(Dispatchers.IO) {
-        openRouterClient.sendForVerification(features)
+        backendClient.verifyTransaction(userId, features, profile)
     }
 }
 
 // ❌ WRONG
 viewModelScope.launch {
-    openRouterClient.sendForVerification(features) // blocking on Main thread
+    backendClient.verifyTransaction(userId, features, profile) // blocking on Main thread
 }
 ```
 
@@ -458,7 +459,7 @@ Modifier.padding(vertical = 16.dp)
 - LLM enrollment + verification flow: complete
 - Profile storage (DataStore): complete
 - UI: functional, POC-level polish
-- No unit tests
+- Unit tests: BackendClientTest, TransferViewModelTest, ApiKeyRemovalTest, OpenRouterDeletionTest
 - No CI/CD
 
 ## Self-Correction Rules

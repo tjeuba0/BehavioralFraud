@@ -36,20 +36,17 @@ POC app Android giả lập luồng chuyển khoản ngân hàng, thu thập beh
 │           │ JSON                             │
 │           ▼                                  │
 │  ┌──────────────────┐                        │
-│  │ OpenRouterClient  │── HTTPS ──►           │
+│  │  BackendClient    │── HTTPS ──►           │
 │  └──────────────────┘            │           │
 └──────────────────────────────────┼───────────┘
                                    │
                     ┌──────────────▼──────────┐
-                    │   OpenRouter API         │
-                    │   (Gemini 2.0 Flash)     │
+                    │   FastAPI Backend        │
+                    │   (DSPy + OpenRouter)    │
                     │                          │
-                    │   Enrollment:            │
-                    │   features → profile     │
-                    │                          │
-                    │   Verification:          │
-                    │   features vs profile    │
-                    │   → risk score           │
+                    │   POST /profile/enroll   │
+                    │   POST /risk/score       │
+                    │   GET  /profile/{id}     │
                     └──────────────────────────┘
 ```
 
@@ -66,7 +63,7 @@ BehavioralFraudPOC/
 │   │   ├── collector/BehavioralCollector.kt # Thu thập behavioral data
 │   │   └── repository/ProfileRepository.kt # Lưu trữ profile (SharedPrefs)
 │   ├── network/
-│   │   └── OpenRouterClient.kt            # Gọi LLM API
+│   │   └── BackendClient.kt               # Gọi FastAPI backend
 │   └── ui/
 │       ├── theme/Theme.kt                 # Material3 Theme
 │       └── screens/
@@ -92,32 +89,20 @@ BehavioralFraudPOC/
 # Mở Android Studio → File → Open → chọn thư mục BehavioralFraudPOC
 ```
 
-### 2. Cấu hình OpenRouter API Key
+### 2. Cấu hình Backend URL
 
-**Cách 1: Trong `gradle.properties` (khuyến nghị)**
-
-Mở file `gradle.properties` và thêm:
+Mở file `local.properties` và thêm:
 
 ```properties
-OPENROUTER_API_KEY=sk-or-v1-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+BACKEND_BASE_URL=http://10.0.2.2:8000
 ```
 
-**Cách 2: Trong `local.properties`**
+> `10.0.2.2` là localhost của host machine khi chạy trên Android emulator.
+> Nếu test trên thiết bị thật, thay bằng IP thực của backend server.
 
-```properties
-OPENROUTER_API_KEY=sk-or-v1-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-```
+> **Lưu ý:** OpenRouter API key giờ chỉ cần cấu hình trên backend (file `.env`), không còn trên client.
 
-> **Lưu ý:** Không commit API key lên git. Thêm `local.properties` vào `.gitignore`.
-
-### 3. Lấy OpenRouter API Key
-
-1. Đăng ký tại https://openrouter.ai/
-2. Vào Settings → API Keys → Create Key
-3. Nạp credit (khoảng $5 là đủ cho POC)
-4. Model sử dụng: `z-ai/glm-5`
-
-### 4. Build & Run
+### 3. Build & Run
 
 - Chọn device/emulator (Android 8.0+ / API 26+)
 - Click Run ▶️
