@@ -1,0 +1,59 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./gradlew *)",
+      "Bash(git *)",
+      "Bash(grep *)",
+      "Bash(find *)",
+      "Bash(cat *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(wc *)",
+      "Bash(sed *)",
+      "Bash(awk *)",
+      "Bash(ktlint *)",
+      "Bash(gh pr *)",
+      "Bash(gh issue *)",
+      "Bash(ls *)",
+      "Bash(echo *)",
+      "Bash(sort *)"
+    ],
+    "deny": [
+      "Bash(rm -rf /)",
+      "Bash(rm -rf /*)",
+      "Bash(git push --force*)",
+      "Bash(git reset --hard*)",
+      "Bash(chmod 777*)"
+    ]
+  },
+"hooks": {
+  "PostToolUse": [
+    {
+      "matcher": "Write|Edit|MultiEdit",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "FILE=\"$TOOL_INPUT_FILE\"; if [[ \"$FILE\" == *.kt ]]; then ktlint --format \"$FILE\" 2>/dev/null || true; fi"
+        }
+      ]
+    }
+  ],
+  "Stop": [
+    {
+      "matcher": "",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "cd \"$(git rev-parse --show-toplevel 2>/dev/null || echo .)\" && echo '=== SESSION END VERIFICATION ===' && if [ -f gradlew ]; then echo '[Build]' && timeout 120 ./gradlew assembleDebug --quiet 2>&1 | tail -5 && echo '[Tests]' && timeout 120 ./gradlew test --quiet 2>&1 | tail -5; else echo 'No Gradle wrapper — skipping verification'; fi"
+        }
+      ]
+    }
+  ]
+},
+  "mcpServers": {
+    "figma-dev-mode-mcp-server": {
+      "type": "sse",
+      "url": "http://127.0.0.1:3845/sse"
+    }
+  }
+}
