@@ -15,6 +15,7 @@
 | TASK-003 | Xóa API key + xóa OpenRouterClient.kt | FR-CL-03 | P0 | done | TASK-001 |
 | TASK-004 | Sửa bug ProfileScreen.kt | FR-CL-04 | P1 | done | none |
 | TASK-005 | Integration test end-to-end | Section 10.3 | P1 | done | TASK-002, TASK-003, BE-deployed |
+| TASK-006 | DEBUG-level request/response logging in BackendClient | — | P1 | done | TASK-001 |
 
 > **BE-API-ready**: Backend đã có OpenAPI spec hoặc ít nhất POST /risk/score và POST /profile/enroll chạy được.  
 > **BE-deployed**: Backend chạy được (localhost hoặc remote) để Android gọi thật.
@@ -264,3 +265,28 @@ ProfileMetric("Gyro stability", String.format("%.6f", avgGyro), "Trung bình 3 t
 | `MainActivity.kt` | KEEP | — |
 
 **Tổng: 1 file mới, 3 file sửa, 1 file xóa, 8 file giữ nguyên.**
+
+---
+
+### TASK-006: DEBUG-level request/response logging in BackendClient
+
+- **Branch:** `feat/client-debug-logging`
+- **Dependencies:** TASK-001
+- **Status:** done
+
+**Goal:** Log request gửi lên backend và response nhận về tại BackendClient, ở DEBUG level. Giúp trace khi gặp lỗi từ phía mobile.
+
+**Scope:**
+- Log URL + request body JSON trước khi gửi HTTP request
+- Log HTTP status code + response body JSON sau khi nhận response
+- Log error detail khi request fail
+- Dùng `android.util.Log.d()` (DEBUG level) — không xuất hiện trong release build
+
+**Files to modify:**
+- `app/src/main/java/com/poc/behavioralfraud/network/BackendClient.kt`
+
+**Done when:**
+- [ ] Mỗi call `enrollSession()`, `verifyTransaction()`, `getProfile()` log request + response
+- [ ] Log ở DEBUG level (không leak trong release)
+- [ ] Không log sensitive data ở INFO/WARN/ERROR
+- [ ] trace_id từ response được log cùng
