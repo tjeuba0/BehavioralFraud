@@ -60,6 +60,10 @@ class BehavioralCollector(context: Context) {
      * Start collecting behavioral data
      */
     fun startSession() {
+        // Stop any previous session to prevent double-registered listeners
+        isCollecting = false
+        sensorManager.unregisterListener(sensorListener)
+
         // Clear previous data
         touchEvents.clear()
         textChangeEvents.clear()
@@ -191,9 +195,15 @@ class BehavioralCollector(context: Context) {
     fun extractFeatures(): BehavioralFeatures {
         val endTime = if (sessionEndTime > 0) sessionEndTime else System.currentTimeMillis()
 
+        // Snapshot all lists for consistent computation across the method
+        val textSnapshot = textChangeEvents.toList()
+        val touchSnapshot = touchEvents.toList()
+        val sensorSnapshot = sensorEvents.toList()
+        val navSnapshot = navigationEvents.toList()
+
         // --- Inter-char delays ---
         val interCharDelays = mutableListOf<Long>()
-        val sortedTextEvents = textChangeEvents.sortedBy { it.timestamp }
+        val sortedTextEvents = textSnapshot.sortedBy { it.timestamp }
         for (i in 1 until sortedTextEvents.size) {
             val delay = sortedTextEvents[i].timestamp - sortedTextEvents[i - 1].timestamp
             if (delay in 1..5000) { // Filter out unreasonable delays
@@ -207,10 +217,10 @@ class BehavioralCollector(context: Context) {
         } else 0.0
 
         // --- Touch features ---
-        val touchSizes = touchEvents.map { it.size.toDouble() }
+        val touchSizes = touchSnapshot.map { it.size.toDouble() }
         val touchDurations = mutableListOf<Long>()
-        val downEvents = touchEvents.filter { it.action == 0 }.sortedBy { it.eventTime } // ACTION_DOWN
-        val remainingUpEvents = touchEvents.filter { it.action == 1 }.sortedBy { it.eventTime }.toMutableList() // ACTION_UP
+        val downEvents = touchSnapshot.filter { it.action == 0 }.sortedBy { it.eventTime } // ACTION_DOWN
+        val remainingUpEvents = touchSnapshot.filter { it.action == 1 }.sortedBy { it.eventTime }.toMutableList() // ACTION_UP
         for (down in downEvents) {
             val matchingUp = remainingUpEvents.firstOrNull { it.eventTime >= down.eventTime && it.downTime == down.downTime }
             if (matchingUp != null) {
@@ -220,7 +230,7 @@ class BehavioralCollector(context: Context) {
         }
 
         // Swipe velocity (from ACTION_MOVE sequences)
-        val moveEvents = touchEvents.filter { it.action == 2 }.sortedBy { it.timestamp }
+        val moveEvents = touchSnapshot.filter { it.action == 2 }.sortedBy { it.timestamp }
         val velocities = mutableListOf<Double>()
         for (i in 1 until moveEvents.size) {
             val dt = (moveEvents[i].eventTime - moveEvents[i - 1].eventTime).toDouble()
@@ -233,8 +243,8 @@ class BehavioralCollector(context: Context) {
         }
 
         // --- Sensor stability (standard deviation) ---
-        val gyroEvents = sensorEvents.filter { it.type == "gyroscope" }
-        val accelEvents = sensorEvents.filter { it.type == "accelerometer" }
+        val gyroEvents = sensorSnapshot.filter { it.type == "gyroscope" }
+        val accelEvents = sensorSnapshot.filter { it.type == "accelerometer" }
 
         fun stdDev(values: List<Float>): Double {
             if (values.size < 2) return 0.0
@@ -243,7 +253,7 @@ class BehavioralCollector(context: Context) {
         }
 
         // --- Touch pressure (from touchMajor) ---
-        val touchPressures = touchEvents.map { it.touchMajor.toDouble() }
+        val touchPressures = touchSnapshot.map { it.touchMajor.toDouble() }
         val avgTouchPressure = if (touchPressures.isNotEmpty()) touchPressures.average() else 0.0
 
         // --- Per-field typing rhythm ---
@@ -262,12 +272,12 @@ class BehavioralCollector(context: Context) {
         val avgInterFieldPause = if (fieldTransitions.isNotEmpty()) fieldTransitions.average() else 0.0
 
         // --- Deletion patterns ---
-        val deletionCount = textChangeEvents.count { it.isDeletion }
-        val deletionRatio = if (textChangeEvents.isNotEmpty())
-            deletionCount.toDouble() / textChangeEvents.size else 0.0
+        val deletionCount = textSnapshot.count { it.isDeletion }
+        val deletionRatio = if (textSnapshot.isNotEmpty())
+            deletionCount.toDouble() / textSnapshot.size else 0.0
 
         // --- Navigation ---
-        val fieldFocusSeq = navigationEvents
+        val fieldFocusSeq = navSnapshot
             .filter { it.eventType == "field_focus" }
             .joinToString(" → ") { it.detail }
 
@@ -281,15 +291,138 @@ class BehavioralCollector(context: Context) {
             endTime - lastTextEvent.timestamp
         } else 0L
 
+        // === Phase 1: Enhanced Feature Extraction (FR-CL-05) ===
+        fun stdDevDouble(values: List<Double>): Double {
+            if (values.size < 2) return 0.0
+            val mean = values.average()
+            return kotlin.math.sqrt(values.map { (it - mean) * (it - mean) }.average())
+        }
+
+        // --- Keystroke: REQ-01 through REQ-05 ---
+        // SRS: "Window size: 5 text events" → group events into windows of 5, compute avg delay per window
+        val windowAvgDelays = if (sortedTextEvents.size >= 5) {
+            sortedTextEvents.chunked(5).filter { it.size == 5 }.map { window ->
+                val delays = window.zipWithNext().map { (a, b) -> b.timestamp - a.timestamp }
+                    .filter { it in 1..5000 }
+                if (delays.isNotEmpty()) delays.average() else 0.0
+            }
+        } else emptyList()
+        val typingSpeedTrend = if (windowAvgDelays.size >= 2) {
+            val n = windowAvgDelays.size.toDouble()
+            val indices = windowAvgDelays.indices.map { it.toDouble() }
+            val sumX = indices.sum(); val sumY = windowAvgDelays.sum()
+            val sumXY = indices.zip(windowAvgDelays).sumOf { (x, y) -> x * y }
+            val sumX2 = indices.sumOf { it * it }
+            (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX)
+        } else 0.0
+        val typingSpeedVariance = if (windowAvgDelays.size >= 2) {
+            val mean = windowAvgDelays.average()
+            windowAvgDelays.map { (it - mean) * (it - mean) }.average()
+        } else 0.0
+        val accountDelay = perFieldAvgDelay["accountNumber"] ?: 0.0
+        val noteDelay = perFieldAvgDelay["note"] ?: 0.0
+        val memoryVsReferenceRatio = if (accountDelay > 0 && noteDelay > 0) accountDelay / noteDelay else 0.0
+        var currentBurstEvents = 1
+        val burstLengths = mutableListOf<Int>()
+        for (i in interCharDelays.indices) {
+            if (interCharDelays[i] < 50) {
+                currentBurstEvents++
+            } else {
+                if (currentBurstEvents >= 3 && interCharDelays[i] > 500) burstLengths.add(currentBurstEvents)
+                currentBurstEvents = 1
+            }
+        }
+        if (currentBurstEvents >= 3) burstLengths.add(currentBurstEvents) // trailing burst
+        val burstCount = burstLengths.size
+        val avgBurstLength = if (burstLengths.isNotEmpty()) burstLengths.average() else 0.0
+
+        // --- Touch: REQ-06 through REQ-13 ---
+        val downXCoords = downEvents.map { it.x.toDouble() }
+        val downYCoords = downEvents.map { it.y.toDouble() }
+        val touchCentroidX = if (downXCoords.isNotEmpty()) downXCoords.average() else 0.0
+        val touchCentroidY = if (downYCoords.isNotEmpty()) downYCoords.average() else 0.0
+        val touchSpreadX = stdDev(downEvents.map { it.x })
+        val touchSpreadY = stdDev(downEvents.map { it.y })
+        val swipeGestures = moveEvents.groupBy { it.downTime }
+        val swipeDirections = mutableListOf<String>()
+        val swipeLengths = mutableListOf<Double>()
+        for ((_, events) in swipeGestures) {
+            if (events.size < 2) continue
+            val sorted = events.sortedBy { it.eventTime }
+            val dx = (sorted.last().x - sorted.first().x).toDouble()
+            val dy = (sorted.last().y - sorted.first().y).toDouble()
+            swipeLengths.add(kotlin.math.sqrt(dx * dx + dy * dy))
+            swipeDirections.add(
+                if (kotlin.math.abs(dx) > kotlin.math.abs(dy)) {
+                    if (dx > 0) "RIGHT" else "LEFT"
+                } else {
+                    if (dy > 0) "DOWN" else "UP"
+                }
+            )
+        }
+        val dominantSwipeDirection = if (swipeDirections.isNotEmpty()) {
+            swipeDirections.groupingBy { it }.eachCount().maxByOrNull { it.value }?.key ?: "NONE"
+        } else "NONE"
+        val avgSwipeLength = if (swipeLengths.isNotEmpty()) swipeLengths.average() else 0.0
+        val touchDurationStdDev = if (touchDurations.size > 1) {
+            val mean = touchDurations.average()
+            kotlin.math.sqrt(touchDurations.map { (it - mean) * (it - mean) }.average())
+        } else 0.0
+        val longPressRatio = if (touchDurations.isNotEmpty()) {
+            touchDurations.count { it > 500 }.toDouble() / touchDurations.size
+        } else 0.0
+
+        // --- Motion: REQ-14 through REQ-19 ---
+        val pitchValues = accelEvents.map { Math.toDegrees(kotlin.math.atan2(it.y.toDouble(), it.z.toDouble())) }
+        val rollValues = accelEvents.map { Math.toDegrees(kotlin.math.atan2(it.x.toDouble(), it.z.toDouble())) }
+        val avgPitch = if (pitchValues.isNotEmpty()) pitchValues.average() else 0.0
+        val avgRoll = if (rollValues.isNotEmpty()) rollValues.average() else 0.0
+        val pitchStdDev = stdDevDouble(pitchValues)
+        val rollStdDev = stdDevDouble(rollValues)
+        var orientationChangeRate = 0
+        var maxOrientationShift = 0.0
+        for (i in 1 until pitchValues.size) {
+            val pitchChange = kotlin.math.abs(pitchValues[i] - pitchValues[i - 1])
+            val rollChange = kotlin.math.abs(rollValues[i] - rollValues[i - 1])
+            val maxChange = maxOf(pitchChange, rollChange)
+            if (pitchChange > 5.0 || rollChange > 5.0) orientationChangeRate++
+            if (maxChange > maxOrientationShift) maxOrientationShift = maxChange
+        }
+
+        // --- Navigation: REQ-20 through REQ-25 ---
+        val allTimestamps = (touchSnapshot.map { it.timestamp } +
+                textSnapshot.map { it.timestamp }).sorted()
+        val inactivityGaps = if (allTimestamps.size >= 2) {
+            allTimestamps.zipWithNext().map { (a, b) -> b - a }.filter { it > 2000 }
+        } else emptyList()
+        val inactivityGapCount = inactivityGaps.size
+        val maxInactivityGapMs = inactivityGaps.maxOrNull() ?: 0L
+        val totalInactivityMs = inactivityGaps.sum()
+        val focusEvents = navSnapshot.filter { it.eventType == "field_focus" }
+        val visitedFields = mutableSetOf<String>()
+        var fieldRevisitCount = 0
+        for (event in focusEvents) {
+            if (event.detail in visitedFields) fieldRevisitCount++
+            else visitedFields.add(event.detail)
+        }
+        val hasBacktracking = fieldRevisitCount > 0
+        val timePerField = mutableMapOf<String, Long>()
+        for (i in focusEvents.indices) {
+            val fieldName = focusEvents[i].detail
+            val focusStart = focusEvents[i].timestamp
+            val focusEnd = if (i + 1 < focusEvents.size) focusEvents[i + 1].timestamp else endTime
+            timePerField[fieldName] = (timePerField[fieldName] ?: 0L) + (focusEnd - focusStart)
+        }
+
         return BehavioralFeatures(
             sessionDurationMs = endTime - sessionStartTime,
             avgInterCharDelayMs = avgInterChar,
             stdInterCharDelayMs = stdInterChar,
             maxInterCharDelayMs = interCharDelays.maxOrNull() ?: 0L,
             minInterCharDelayMs = interCharDelays.minOrNull() ?: 0L,
-            totalTextChanges = textChangeEvents.size,
-            pasteCount = textChangeEvents.count { it.isPaste },
-            totalTouchEvents = touchEvents.size,
+            totalTextChanges = textSnapshot.size,
+            pasteCount = textSnapshot.count { it.isPaste },
+            totalTouchEvents = touchSnapshot.size,
             avgTouchSize = if (touchSizes.isNotEmpty()) touchSizes.average() else 0.0,
             avgTouchDurationMs = if (touchDurations.isNotEmpty()) touchDurations.average() else 0.0,
             avgSwipeVelocity = if (velocities.isNotEmpty()) velocities.average() else 0.0,
@@ -306,8 +439,41 @@ class BehavioralCollector(context: Context) {
             deletionRatio = deletionRatio,
             fieldFocusSequence = fieldFocusSeq,
             timeToFirstInput = timeToFirstInput,
-            timeFromLastInputToConfirm = timeFromLastInputToConfirm
+            timeFromLastInputToConfirm = timeFromLastInputToConfirm,
+            // Phase 1 — Enhanced features
+            typingSpeedTrend = typingSpeedTrend,
+            typingSpeedVariance = typingSpeedVariance,
+            memoryVsReferenceRatio = memoryVsReferenceRatio,
+            burstCount = burstCount,
+            avgBurstLength = avgBurstLength,
+            touchCentroidX = touchCentroidX,
+            touchCentroidY = touchCentroidY,
+            touchSpreadX = touchSpreadX,
+            touchSpreadY = touchSpreadY,
+            dominantSwipeDirection = dominantSwipeDirection,
+            avgSwipeLength = avgSwipeLength,
+            touchDurationStdDev = touchDurationStdDev,
+            longPressRatio = longPressRatio,
+            avgPitch = avgPitch,
+            avgRoll = avgRoll,
+            pitchStdDev = pitchStdDev,
+            rollStdDev = rollStdDev,
+            orientationChangeRate = orientationChangeRate,
+            maxOrientationShift = maxOrientationShift,
+            inactivityGapCount = inactivityGapCount,
+            maxInactivityGapMs = maxInactivityGapMs,
+            totalInactivityMs = totalInactivityMs,
+            fieldRevisitCount = fieldRevisitCount,
+            hasBacktracking = hasBacktracking,
+            timePerField = timePerField.toMap()
         )
+    }
+
+    /**
+     * Add a sensor event for testing (no SensorManager needed)
+     */
+    internal fun addSensorEventForTest(event: SensorEvent) {
+        sensorEvents.add(event)
     }
 
     /**

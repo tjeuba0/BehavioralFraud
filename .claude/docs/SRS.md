@@ -1,521 +1,228 @@
-# SRS — Behavioral Fraud Detection — Backend Migration
+# SRS — Bổ sung: Enhanced Behavioral Feature Extraction
 
-> **Version:** 1.0  
-> **Date:** 2026-03  
-> **Author:** Van (Vandz)  
-> **Status:** Draft  
-
----
-
-## 1. Introduction
-
-### 1.1 Purpose
-
-This document specifies requirements for adding a backend layer to the Behavioral Fraud Detection project. The core change: move LLM calling from Android client to a FastAPI backend using DSPy.
-
-### 1.2 Scope
-
-**In scope:**
-
-- New backend: FastAPI server with DSPy programs, calling LLM via OpenRouter
-- Android client: replace `OpenRouterClient.kt` with `BackendClient.kt`, update `TransferViewModel.kt`
-
-**Out of scope (DO NOT MODIFY):**
-
-- `BehavioralCollector.kt` — behavioral data collection
-- `extractFeatures()` — feature extraction logic
-- `BehavioralModels.kt` — data models
-- `LocalScorer.kt` — offline fallback scorer
-- UI/UX of screens (except bug fix in `ProfileScreen.kt`)
-- `HomeScreen.kt`, `TransferScreen.kt`, `Theme.kt`, `MainActivity.kt`
-
-### 1.3 Definitions
-
-| Term | Definition |
-|------|-----------|
-| DSPy | Stanford NLP framework: define AI tasks via Signature (input/output contract) instead of prompt strings |
-| Signature | DSPy input/output declaration, similar to a typed function signature |
-| dspy.LM() | DSPy's LLM connection config, supports OpenAI-compatible endpoints |
-| OpenRouter | API gateway for multiple LLMs, provides OpenAI-compatible endpoint |
-| Enrollment | Phase where legitimate user performs 3 transfers to build behavioral baseline |
-| Verification | Phase where current session is compared against enrolled profile |
-| Feature JSON | Extracted behavioral metrics (BehavioralFeatures), sent from Android to backend |
-| Decision policy | Threshold logic: 0-30 APPROVE, 31-70 STEP_UP_AUTH, 71-100 BLOCK |
-
-### 1.4 References
-
-- Architecture document: Behavioral Fraud Detection — Architecture v2
-- DSPy Documentation: https://dspy.ai
-- OpenRouter API Documentation: https://openrouter.ai/docs
-- FastAPI Documentation: https://fastapi.tiangolo.com
-- Current project README.md
+> Append vào `SRS.md` sau FR-CL-04, trước Section 5 (Non-Functional Requirements).  
+> Cập nhật section 6.1 (Data Model) và section 10.2 (Acceptance Criteria).  
+> Reference: `plan_behavioral_features.md`, `research_behavioral_biometrics.md`
 
 ---
 
-## 2. System Overview
-
-### 2.1 Architecture — As-Is
-
-```
-Android App
-  → BehavioralCollector (touch/sensor/text/navigation)
-  → FeatureExtractor (20+ features on-device)
-  → OpenRouterClient.kt (LLM call with prompt string)
-  → OpenRouter API (Gemini 2.0 Flash / GLM-5)
-  → Parse response → Display result
-```
-
-Problems:
-- API key in BuildConfig (decompilable)
-- Prompt logic hardcoded in Android — changing prompt requires app rebuild
-- Changing model requires code change + release
-- No observability (no latency/token/score logging)
-- Decision policy split between prompt and LocalScorer
-
-### 2.2 Architecture — To-Be
-
-```
-Android App
-  → BehavioralCollector (unchanged)
-  → FeatureExtractor (unchanged)
-  → BackendClient.kt (POST feature JSON to FastAPI)
-
-FastAPI Backend
-  → routes_risk.py (receive request, return JSON)
-  → RiskService (orchestration + decision policy)
-  → DSPy Program (ProfileBuilder / RiskScorer)
-  → dspy.LM() → OpenRouter API
-```
-
-Design principles:
-- Android only collects behavioral data and sends extracted features. It knows nothing about prompts, models, or API keys.
-- FastAPI is the HTTP layer only. No business logic.
-- RiskService contains orchestration and decision policy (APPROVE/STEP_UP/BLOCK thresholds).
-- DSPy contains AI logic: input/output contracts for each task.
-- dspy.LM() is the model adapter. Phase 1 uses it directly. Phase 2 adds abstraction if needed.
-
-### 2.3 Phasing
-
-| Phase | Content | Profile storage |
-|-------|---------|-----------------|
-| 1A | FastAPI + DSPy + dspy.LM(OpenRouter). Android sends both profile and session in request. | Client-side (SharedPreferences, as current) |
-| 1B | Move profile to server. Android sends only user_id + current session. | Server-side (SQLite or JSON file) |
-| 2 | Add provider abstraction only when real need arises (different auth, retry policy, CLIProxy, etc.) | No impact |
-
----
-
-## 3. Functional Requirements — Backend
-
-### FR-BE-01: POST /risk/score
-
-**Description:** Receive current session features and behavioral profile, return risk analysis result.
-
-**Request body (Phase 1A):**
-
-```json
-{
-  "user_id": "string",
-  "current_session": { /* BehavioralFeatures */ },
-  "profile": { /* BehavioralProfile */ }
-}
-```
-
-**Request body (Phase 1B):**
-
-```json
-{
-  "user_id": "string",
-  "current_session": { /* BehavioralFeatures */ }
-}
-```
-
-**Response body:**
-
-```json
-{
-  "risk_score": 0-100,
-  "risk_level": "LOW | MEDIUM | HIGH",
-  "anomalies": ["string"],
-  "explanation": "string",
-  "recommendation": "APPROVE | STEP_UP_AUTH | BLOCK",
-  "trace_id": "string",
-  "model": "string",
-  "latency_ms": 0
-}
-```
-
-**Processing rules:**
-
-1. Validate request schema
-2. Call `RiskService.score()`
-3. RiskService calls DSPy `RiskScoringProgram` via `dspy.LM()`
-4. RiskService applies decision policy on DSPy output
-5. Return JSON response with `trace_id`, `model`, `latency_ms`
-
-**Acceptance criteria:**
-
-- [ ] Returns valid JSON matching response schema
-- [ ] `risk_score` is integer 0–100
-- [ ] `risk_level` and `recommendation` are derived by decision policy in RiskService, NOT by LLM
-- [ ] `trace_id` is unique UUID per request
-- [ ] `latency_ms` reflects actual processing time
-- [ ] Returns 422 on invalid request body
-- [ ] Returns 500 with `trace_id` on internal error
-
----
-
-### FR-BE-02: POST /profile/enroll
-
-**Description:** Receive one enrollment session's features. When 3 sessions collected, call DSPy ProfileBuilderProgram to create profile.
-
-**Request body:**
-
-```json
-{
-  "user_id": "string",
-  "session_features": { /* BehavioralFeatures */ }
-}
-```
-
-**Response body (pending — fewer than 3 sessions):**
-
-```json
-{
-  "status": "pending",
-  "enrollment_count": 1 | 2,
-  "remaining": 2 | 1
-}
-```
-
-**Response body (completed — 3 sessions, profile created):**
-
-```json
-{
-  "status": "completed",
-  "enrollment_count": 3,
-  "profile": { /* BehavioralProfile */ },
-  "profile_summary": "string"
-}
-```
-
-**Processing rules:**
-
-1. Store session features in enrollment buffer (in-memory or DB)
-2. If fewer than 3: return `status: "pending"`
-3. If 3: call `ProfileBuilderProgram`, create and store profile, return `status: "completed"`
-
-**Acceptance criteria:**
-
-- [ ] First 2 calls return `status: "pending"` with correct `enrollment_count` and `remaining`
-- [ ] Third call returns `status: "completed"` with profile and summary
-- [ ] Profile contains averaged metrics from all 3 sessions
-- [ ] `profile_summary` is generated by DSPy ProfileBuilderProgram
-- [ ] Returns 422 on invalid request body
-- [ ] Enrollment buffer is per-user (user_id)
-
----
-
-### FR-BE-03: GET /profile/{user_id}
-
-**Description:** Return behavioral profile for a user. For debug and demo purposes.
-
-**Response body:**
-
-```json
-{
-  "user_id": "string",
-  "enrollment_count": 3,
-  "profile": { /* BehavioralProfile */ },
-  "profile_summary": "string"
-}
-```
-
-**Acceptance criteria:**
-
-- [ ] Returns profile when it exists
-- [ ] Returns 404 when no profile exists for user_id
-- [ ] Response matches BehavioralProfile schema
-
----
-
-### FR-BE-04: DSPy RiskScoringProgram
-
-**Description:** DSPy Signature defining the contract for comparing a session against a profile.
-
-| Direction | Field | Description |
-|-----------|-------|-------------|
-| Input | `profile` | BehavioralProfile JSON (enrolled) |
-| Input | `current_session` | BehavioralFeatures JSON (current) |
-| Output | `risk_score` | Integer 0–100 |
-| Output | `top_reasons` | List of anomaly reasons (Vietnamese) |
-| Output | `confidence` | Float 0.0–1.0 |
-
-**Implementation:**
-
-- Phase 1: single `dspy.Predict` call. No ChainOfThought, no multi-hop.
-- Signature must include description of what each output means.
-- Paste detection threshold (lengthDelta >= 3) should be mentioned in signature description for model context.
-
-**Acceptance criteria:**
-
-- [ ] Signature class defined with typed InputField and OutputField
-- [ ] Calling the program with valid profile + session returns all 3 output fields
-- [ ] `risk_score` is parseable as integer 0–100
-- [ ] `top_reasons` is parseable as list of strings
-- [ ] `confidence` is parseable as float 0.0–1.0
-- [ ] Works with `dspy.Predict` (single LLM call)
-
----
-
-### FR-BE-05: DSPy ProfileBuilderProgram
-
-**Description:** DSPy Signature defining the contract for building a profile from enrollment data.
-
-| Direction | Field | Description |
-|-----------|-------|-------------|
-| Input | `sessions` | List of 3 BehavioralFeatures JSON |
-| Output | `profile_summary` | Description of user behavior with specific numbers |
-| Output | `expected_ranges` | Normal value ranges for each feature |
-| Output | `behavioral_markers` | List of distinctive characteristics of this user |
-
-**Implementation:**
-
-- Phase 1: single `dspy.Predict` call.
-
-**Acceptance criteria:**
-
-- [ ] Signature class defined with typed InputField and OutputField
-- [ ] Calling the program with 3 valid sessions returns all 3 output fields
-- [ ] `profile_summary` contains specific numeric values (not vague descriptions)
-- [ ] Works with `dspy.Predict` (single LLM call)
-
----
-
-### FR-BE-06: Decision Policy
-
-**Description:** Threshold logic in RiskService (Python code). NOT in DSPy program. NOT in LLM prompt.
-
-| risk_score | risk_level | recommendation | Meaning |
-|------------|-----------|----------------|---------|
-| 0 – 30 | LOW | APPROVE | Behavior matches profile |
-| 31 – 70 | MEDIUM | STEP_UP_AUTH | Some anomalies |
-| 71 – 100 | HIGH | BLOCK | Significant deviation |
-
-DSPy program returns only `risk_score` (integer) and `top_reasons`. RiskService applies thresholds and assigns `risk_level` + `recommendation`.
-
-**Acceptance criteria:**
-
-- [ ] Policy is deterministic Python code in RiskService
-- [ ] Score 0 → APPROVE, LOW
-- [ ] Score 30 → APPROVE, LOW
-- [ ] Score 31 → STEP_UP_AUTH, MEDIUM
-- [ ] Score 70 → STEP_UP_AUTH, MEDIUM
-- [ ] Score 71 → BLOCK, HIGH
-- [ ] Score 100 → BLOCK, HIGH
-- [ ] Policy is NOT inside any DSPy Signature or prompt
-
----
-
-### FR-BE-07: dspy.LM() Configuration with OpenRouter
-
-**Description:** Connect DSPy to OpenRouter via OpenAI-compatible endpoint.
-
-```python
-import dspy
-
-lm = dspy.LM(
-    "openai/<model-name>",
-    api_base="https://openrouter.ai/api/v1",
-    api_key=OPENROUTER_API_KEY,
-)
-dspy.configure(lm=lm)
-```
-
-Configuration values (`model`, `api_base`, `api_key`) read from environment variables or `.env` file. Never hard-coded.
-
-**Acceptance criteria:**
-
-- [ ] `dspy.LM()` configured with OpenRouter base URL
-- [ ] Model name, API key, base URL read from environment / .env
-- [ ] No hard-coded credentials in source code
-- [ ] A test call (spike test) succeeds: send a trivial Signature, get valid response
-- [ ] Changing `LLM_MODEL` in `.env` and restarting changes the model used (no code change)
-
----
-
-### FR-BE-08: Logging and Observability
-
-**Description:** Every request must produce a structured log entry.
-
-| Field | Type | Purpose |
-|-------|------|---------|
-| `trace_id` | UUID | Request identifier for debugging |
-| `user_id` | string | User identifier |
-| `model` | string | Model used (e.g., google/gemini-2.0-flash-001) |
-| `risk_score` | int | Scoring result |
-| `latency_ms` | int | Total processing time including LLM call |
-| `llm_latency_ms` | int | LLM call time only |
-| `token_usage` | object | prompt_tokens, completion_tokens (if OpenRouter returns it) |
-| `recommendation` | string | APPROVE / STEP_UP_AUTH / BLOCK |
-
-**Acceptance criteria:**
-
-- [ ] Every `/risk/score` request produces log entry with all fields above
-- [ ] Every `/profile/enroll` request (3rd call) produces log entry with profile build info
-- [ ] Logs are structured (JSON format)
-- [ ] `trace_id` is included in both log and response
-
----
-
-## 4. Functional Requirements — Android Client
-
-### FR-CL-01: BackendClient.kt
-
-**Description:** New file replacing `OpenRouterClient.kt`. POSTs feature JSON to FastAPI backend instead of calling OpenRouter directly.
-
-**Methods:**
-
-- `enrollSession(userId: String, features: BehavioralFeatures)` → calls `POST /profile/enroll`
-- `verifyTransaction(userId: String, features: BehavioralFeatures, profile: BehavioralProfile)` → calls `POST /risk/score`
-- `getProfile(userId: String)` → calls `GET /profile/{user_id}`
+### FR-CL-05: Enhanced Feature Extraction — Phase 1
+
+**Description:** Bổ sung feature extraction từ raw data đã có trong BehavioralCollector. Không thay đổi data collection — chỉ sửa `extractFeatures()` và thêm fields vào `BehavioralFeatures`.
+
+**Scope:** Keystroke (Category 1), Touch (Category 2), Motion (Category 3), Navigation (Category 4).
+
+**New features — Keystroke:**
+
+| REQ-ID | Feature | Type | Description |
+|--------|---------|------|-------------|
+| REQ-01 | `typingSpeedTrend` | double | Slope of per-window avg delay. Negative = speeding up (normal), ~0 = constant (scripted), positive = slowing down. Window size: 5 text events. |
+| REQ-02 | `typingSpeedVariance` | double | Variance of per-window avg delays. High = irregular rhythm (duress). |
+| REQ-03 | `memoryVsReferenceRatio` | double | delay(accountNumber) / delay(note). >1 = account field slower (reading from source). <1 = account field faster (memorized or paste). 0 if either field missing. |
+| REQ-04 | `burstCount` | int | Count of bursts: >=3 consecutive text events with delay <50ms followed by pause >500ms. |
+| REQ-05 | `avgBurstLength` | double | Average number of events per burst. 0 if no bursts. |
+
+**New features — Touch:**
+
+| REQ-ID | Feature | Type | Description |
+|--------|---------|------|-------------|
+| REQ-06 | `touchCentroidX` | double | Mean x-coordinate of all ACTION_DOWN events. |
+| REQ-07 | `touchCentroidY` | double | Mean y-coordinate of all ACTION_DOWN events. |
+| REQ-08 | `touchSpreadX` | double | Std dev of x-coordinates. |
+| REQ-09 | `touchSpreadY` | double | Std dev of y-coordinates. |
+| REQ-10 | `dominantSwipeDirection` | string | Most frequent swipe direction: "UP" / "DOWN" / "LEFT" / "RIGHT" / "NONE". |
+| REQ-11 | `avgSwipeLength` | double | Average Euclidean distance per swipe gesture (pixels). |
+| REQ-12 | `touchDurationStdDev` | double | Std dev of touch durations (DOWN→UP, ms). |
+| REQ-13 | `longPressRatio` | double | Ratio of touches with duration >500ms. |
+
+**New features — Motion:**
+
+| REQ-ID | Feature | Type | Description |
+|--------|---------|------|-------------|
+| REQ-14 | `avgPitch` | double | Mean pitch angle (degrees). Calculated from accelerometer: atan2(y, z). |
+| REQ-15 | `avgRoll` | double | Mean roll angle (degrees). Calculated from accelerometer: atan2(x, z). |
+| REQ-16 | `pitchStdDev` | double | Std dev of pitch over session. |
+| REQ-17 | `rollStdDev` | double | Std dev of roll over session. |
+| REQ-18 | `orientationChangeRate` | int | Count of consecutive samples where pitch or roll changes >5°. |
+| REQ-19 | `maxOrientationShift` | double | Maximum single-sample orientation change (degrees). |
+
+**New features — Navigation:**
+
+| REQ-ID | Feature | Type | Description |
+|--------|---------|------|-------------|
+| REQ-20 | `inactivityGapCount` | int | Count of gaps >2000ms between any two consecutive events (touch or text). |
+| REQ-21 | `maxInactivityGapMs` | long | Longest gap (ms). 0 if no gaps >2000ms. |
+| REQ-22 | `totalInactivityMs` | long | Sum of all gaps >2000ms. |
+| REQ-23 | `fieldRevisitCount` | int | Number of times a previously-focused field receives focus again. |
+| REQ-24 | `hasBacktracking` | boolean | true if `fieldRevisitCount > 0`. |
+| REQ-25 | `timePerField` | Map<String, Long> | Time spent on each field (ms), from focus to next field focus. |
 
 **Constraints:**
 
-- No prompt strings
-- No knowledge of model or OpenRouter API key
-- No LLM response parsing — only parses JSON from backend
-- Base URL read from `BuildConfig.BACKEND_BASE_URL`, not hard-coded
-- Timeout: 60 seconds (same as current, LLM call can take 2–8 seconds)
-- HTTP client: OkHttp (already in dependencies)
+- All new features computed in `extractFeatures()` from existing raw data
+- BehavioralCollector data collection unchanged
+- Default value for all new numeric features: 0.0 (or 0)
+- Default for `dominantSwipeDirection`: "NONE"
+- Default for `timePerField`: empty map
+- All features serializable to JSON (for backend transmission)
+- `touchCentroidX/Y` are absolute pixel values — backend should be aware of screen dimensions for normalization
+
+**Affected files:**
+
+- MODIFY: `data/model/BehavioralModels.kt` — add fields to `BehavioralFeatures` data class
+- MODIFY: `data/collector/BehavioralCollector.kt` → `extractFeatures()` — add computation logic
 
 **Acceptance criteria:**
 
-- [ ] File created at `network/BackendClient.kt`
-- [ ] All 3 methods implemented
-- [ ] No reference to OpenRouter API key or prompt strings anywhere in file
-- [ ] Base URL from BuildConfig
-- [ ] Returns parsed response models matching backend response schemas
-- [ ] Throws meaningful exceptions on network/parse errors
+- [ ] All 25 REQ-IDs have corresponding fields in `BehavioralFeatures`
+- [ ] `extractFeatures()` computes all 25 features from existing raw data
+- [ ] No new sensors registered, no new event listeners added
+- [ ] Default values used when insufficient data (e.g., <2 text events → trend = 0)
+- [ ] Existing features unchanged (regression-safe)
+- [ ] JSON serialization includes all new fields
+- [ ] App compiles and runs without crash
 
 ---
 
-### FR-CL-02: Update TransferViewModel.kt
+### FR-CL-06: Cognitive & Intent Signal Collection — Phase 2
 
-**Description:** Replace LLM client calls with backend client calls in `submitTransfer()`.
+**Description:** Thêm data collection mới trong BehavioralCollector để phát hiện dấu hiệu scam / social engineering. Thu thập các signals về trạng thái tinh thần và context của người dùng.
 
-**Changes:**
+**Scope:** Cognitive / Intent (Category 6) + device context (Category 5 non-security subset) + minor Touch addition.
 
-- Replace `llmClient.enrollProfile(allFeatures)` → `backendClient.enrollSession(userId, features)`
-- Replace `llmClient.verifyTransaction(features, profile)` → `backendClient.verifyTransaction(userId, features, profile)`
-- Enrollment counting: keep client-side in Phase 1A; backend handles it in Phase 1B
+**New features — Cognitive / Intent:**
 
-**Keep unchanged:**
+| REQ-ID | Feature | Type | Description |
+|--------|---------|------|-------------|
+| REQ-01 | `isCallActiveDuringSession` | boolean | `AudioManager.getMode()` == `MODE_IN_CALL` or `MODE_IN_COMMUNICATION` at any check point during session. |
+| REQ-02 | `callStartedDuringSession` | boolean | Call not active at session start but active at a later check point. |
+| REQ-03 | `backgroundSwitchCount` | int | Number of times app went to background and returned to foreground during session. Captured via `onPause`/`onResume`. |
+| REQ-04 | `totalBackgroundTimeMs` | long | Total time app spent in background during session (ms). |
+| REQ-05 | `avgBackgroundDurationMs` | double | Average per-switch background duration. 0 if no switches. |
+| REQ-06 | `preSubmitHesitationCategory` | string | "NORMAL" / "RUSHED" / "HESITANT" based on `timeFromLastInputToConfirm` vs enrollment baseline. RUSHED: < baseline - 2*std. HESITANT: > baseline + 2*std. Defaults to "UNKNOWN" if no baseline. |
+| REQ-07 | `sessionHourOfDay` | int | Hour of day (0-23) when session started. |
+| REQ-08 | `sessionDayOfWeek` | int | Day of week (1=Monday, 7=Sunday). |
+| REQ-09 | `timeSinceLastSessionMs` | long | Time since previous session ended (ms). -1 if first session. Stored in SharedPreferences. |
 
-- State machine (`sealed class TransferUiState`) — no changes
-- `LocalScorer` fallback when backend unreachable — keep existing try/catch logic
-- `collector` (BehavioralCollector) — no changes
-- All other properties and methods
+**New features — Device context (non-security, for feature normalization):**
+
+| REQ-ID | Feature | Type | Description |
+|--------|---------|------|-------------|
+| REQ-10 | `deviceModel` | string | `Build.MODEL` — for context grouping, not security check |
+| REQ-11 | `screenWidthPx` | int | Screen width in pixels — for touch coordinate normalization |
+| REQ-12 | `screenHeightPx` | int | Screen height in pixels |
+| REQ-13 | `screenDensity` | double | `DisplayMetrics.density` — for touch size normalization |
+| REQ-14 | `batteryLevel` | int | Battery percentage (0-100). Context signal: charging + low gyro = on desk. |
+| REQ-15 | `isCharging` | boolean | Device charging state |
+
+**New features — Touch (minor addition):**
+
+| REQ-ID | Feature | Type | Description |
+|--------|---------|------|-------------|
+| REQ-16 | `multiTouchCount` | int | Count of MotionEvents with `pointerCount > 1`. |
+| REQ-17 | `maxPointerCount` | int | Maximum `pointerCount` observed in session. |
+
+**Implementation notes:**
+
+- `AudioManager.getMode()`: no permission required. Check at `startSession()`, at `stopSession()`, and at each `onResume()`.
+- `onPause`/`onResume`: BehavioralCollector needs lifecycle awareness. Either pass callbacks from Activity, or make collector implement `DefaultLifecycleObserver`.
+- `timeSinceLastSessionMs`: store `lastSessionEndTimestamp` in SharedPreferences at session end.
+- Device context features: collected once at session start, not repeatedly.
+- `preSubmitHesitationCategory`: requires access to enrollment profile baseline. If no profile exists yet (enrollment phase), output "UNKNOWN".
+- `multiTouchCount`: modify `onTouchEvent()` to read `event.pointerCount`.
+
+**Constraints:**
+
+- No new permissions required (AudioManager.getMode(), BatteryManager, Build, DisplayMetrics are all permission-free)
+- Data collection passive — no UI interaction or user prompt
+- Device context features are NOT security checks (Zimperium handles security). They are normalization context.
+
+**Affected files:**
+
+- MODIFY: `data/model/BehavioralModels.kt` — add fields to `BehavioralFeatures`
+- MODIFY: `data/collector/BehavioralCollector.kt` — add lifecycle callbacks, AudioManager check, SharedPreferences, pointerCount collection
+- MODIFY: Activity hoặc Fragment hosting transfer screen — pass lifecycle events to collector
 
 **Acceptance criteria:**
 
-- [ ] `llmClient` replaced with `backendClient`
-- [ ] `OpenRouterClient` no longer imported or instantiated
-- [ ] State machine unchanged
-- [ ] LocalScorer fallback still works when backend is unreachable
-- [ ] Enrollment flow still works (3 sessions → profile)
+- [ ] All 17 REQ-IDs have corresponding fields in `BehavioralFeatures`
+- [ ] `isCallActiveDuringSession` correctly detects active phone call
+- [ ] `backgroundSwitchCount` increments on each pause→resume cycle
+- [ ] `totalBackgroundTimeMs` accumulates background time accurately
+- [ ] `timeSinceLastSessionMs` persists across app restarts via SharedPreferences
+- [ ] Device context features populated correctly (deviceModel matches actual device)
+- [ ] `multiTouchCount` counts events with >1 pointer
+- [ ] No new permissions added to AndroidManifest.xml
+- [ ] Existing features unchanged
+- [ ] JSON serialization includes all new fields
 
 ---
 
-### FR-CL-03: Remove API Key from Client
+### FR-CL-07: Advanced Motion & Pattern Analysis — Phase 3
 
-**Description:** Remove OPENROUTER_API_KEY from `app/build.gradle.kts` and BuildConfig.
+**Description:** Feature extraction nâng cao cần tương quan dữ liệu giữa các nguồn (touch × sensor, text event sequences).
 
-**Changes:**
+**Scope:** Motion (Category 3 advanced), Cognitive (Category 6 advanced).
 
-- Remove `buildConfigField("String", "OPENROUTER_API_KEY", ...)` from `app/build.gradle.kts`
-- Remove all references to `BuildConfig.OPENROUTER_API_KEY`
-- Add `buildConfigField("String", "BACKEND_BASE_URL", ...)` with configurable value
-- Default: `http://10.0.2.2:8000` for emulator, or actual server URL
+**New features — Motion (advanced):**
+
+| REQ-ID | Feature | Type | Description |
+|--------|---------|------|-------------|
+| REQ-01 | `avgTapAccelSpike` | double | Average peak accel magnitude in 100ms window after each touch DOWN event, minus pre-tap baseline. Measures grasp resistance. |
+| REQ-02 | `avgTapRecoveryMs` | double | Average time (ms) for accel magnitude to return to baseline after tap. |
+| REQ-03 | `idleGyroRMS` | double | RMS of gyroscope magnitude during idle periods (no touch event for >500ms). Measures hand tremor. |
+| REQ-04 | `idleAccelJitter` | double | High-frequency accel variation during idle periods. |
+
+**New features — Cognitive (advanced):**
+
+| REQ-ID | Feature | Type | Description |
+|--------|---------|------|-------------|
+| REQ-05 | `correctionSameCount` | int | Count of deletion(1-2 chars) immediately followed by insertion(1-2 chars) — typo fix pattern. Detected from `lengthDelta` sequence: -1/-2 then +1/+2 within 1000ms. |
+| REQ-06 | `correctionDifferentCount` | int | Count of deletion(>=3 chars) followed by pause(>500ms) then insertion(>=3 chars) — content change pattern. |
+| REQ-07 | `screenshotDuringInput` | boolean | Screenshot captured while session is active and user is inputting (before confirm). Android 14+: ScreenCaptureCallback. Below 14: ContentObserver on MediaStore.Images. |
+
+**Implementation notes:**
+
+- Grasp resistance (REQ-01/02): requires correlating touch DOWN timestamps with accelerometer data. For each DOWN event, find accel samples in [t, t+100ms] window. Compute magnitude spike = max(√(x²+y²+z²)) - baseline (avg magnitude in [-200ms, 0] window before tap).
+- Idle periods (REQ-03/04): identify intervals >500ms with no touch events. Compute gyro/accel RMS in those intervals only.
+- Correction patterns (REQ-05/06): analyze `textChangeEvents` sequence. Look at `lengthDelta` patterns without needing actual text content (privacy-preserving).
+- Screenshot detection (REQ-07): `Activity.ScreenCaptureCallback` (API 34+) or `ContentObserver` on `MediaStore.Images.Media.EXTERNAL_CONTENT_URI` for older versions. Must register at session start, unregister at session end.
+
+**Constraints:**
+
+- Touch-sensor correlation requires timestamps in same clock base (SystemClock.elapsedRealtime or System.currentTimeMillis — must be consistent)
+- Screenshot detection: `ContentObserver` may have timing delay — acceptable for fraud detection (not real-time blocking)
+- Correction patterns: privacy-preserving — analyzes `lengthDelta` only, never reads actual text content
+- If insufficient data for any feature (e.g., <3 tap events for grasp), default to 0
+
+**Affected files:**
+
+- MODIFY: `data/model/BehavioralModels.kt` — add fields
+- MODIFY: `data/collector/BehavioralCollector.kt` — add screenshot observer, enhance sensor storage for windowed lookup
+- MODIFY: `data/collector/BehavioralCollector.kt` → `extractFeatures()` — add cross-correlation logic
 
 **Acceptance criteria:**
 
-- [ ] No `OPENROUTER_API_KEY` in `app/build.gradle.kts`
-- [ ] No `BuildConfig.OPENROUTER_API_KEY` referenced anywhere in codebase
-- [ ] `BACKEND_BASE_URL` available in BuildConfig
-- [ ] App compiles without error
+- [ ] All 7 REQ-IDs have corresponding fields in `BehavioralFeatures`
+- [ ] `avgTapAccelSpike` correlates touch and sensor data correctly (non-zero when tapping while holding device)
+- [ ] `idleGyroRMS` is near-zero when device on desk, non-zero when hand-held
+- [ ] `correctionSameCount` detects typo-fix patterns
+- [ ] `correctionDifferentCount` detects content-change patterns
+- [ ] `screenshotDuringInput` detects screenshots on test device
+- [ ] Screenshot observer properly registered/unregistered with session lifecycle
+- [ ] No privacy violation — text content never read, only `lengthDelta`
 
 ---
 
-### FR-CL-04: Fix ProfileScreen.kt Bug
+## Update: Section 6.1 — BehavioralFeatures Data Model
 
-**Description:** Fix references to non-existent properties on BehavioralProfile.
+> Replace existing section 6.1. Fields marked 🆕 are additions.
 
-**Current (broken):**
+### 6.1 BehavioralFeatures
 
-```kotlin
-profile.avgGyroStability   // DOES NOT EXIST on BehavioralProfile
-profile.avgAccelStability  // DOES NOT EXIST on BehavioralProfile
-```
+Output of on-device feature extraction, sent to backend as JSON. Backend needs corresponding Pydantic model.
 
-**BehavioralProfile has per-axis fields:**
-
-- `avgGyroStabilityX`, `avgGyroStabilityY`, `avgGyroStabilityZ`
-- `avgAccelStabilityX`, `avgAccelStabilityY`, `avgAccelStabilityZ`
-
-**Fix options (pick one):**
-
-- Display per-axis values (X, Y, Z separately)
-- Compute average of 3 axes at display time: `(X + Y + Z) / 3`
-
-**Acceptance criteria:**
-
-- [ ] No compile error in ProfileScreen.kt
-- [ ] Gyro and accel stability values display correctly
-- [ ] No crash when viewing profile screen
-
----
-
-## 5. Non-Functional Requirements
-
-### NFR-01: Performance
-
-- Backend processing time (excluding LLM call): < 100ms
-- LLM call time: depends on OpenRouter and model, typically 2–8 seconds. Backend must not add significant latency.
-- Android client timeout: 60 seconds
-
-### NFR-02: Security
-
-- OpenRouter API key exists ONLY on backend (environment variable). Never appears on client.
-- Android → Backend connection via HTTPS (except local dev).
-- Backend → OpenRouter connection via HTTPS (OpenRouter default).
-
-### NFR-03: Extensibility
-
-- Change model: only change `LLM_MODEL` in `.env`, no code changes.
-- Change provider (Phase 2): add new provider without modifying DSPy programs or Android code.
-- Add new DSPy program: does not affect existing programs.
-
-### NFR-04: Operability
-
-- Backend starts with single command: `uvicorn app.main:app`
-- Configuration via single `.env` file
-- Health check endpoint: `GET /health`
-- Structured logs (JSON) with `trace_id` per request
-
-### NFR-05: Testability
-
-- DSPy Signatures testable independently with mock LLM
-- RiskService testable with mock DSPy program
-- API routes testable with FastAPI TestClient
-- Android BackendClient testable with MockWebServer
-
----
-
-## 6. Data Models
-
-### 6.1 BehavioralFeatures (unchanged from Android)
-
-No changes. This is the output of on-device feature extraction, sent to backend as JSON. Backend needs a corresponding Pydantic model.
+**Existing fields (unchanged):**
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -537,140 +244,90 @@ No changes. This is the output of on-device feature extraction, sent to backend 
 | accelStabilityY | double | Accelerometer stability Y-axis |
 | accelStabilityZ | double | Accelerometer stability Z-axis |
 | avgTouchPressure | double | Average touch pressure (touchMajor) |
-| perFieldAvgDelay | Map<String, Double> | Per-field average typing delay |
+| perFieldAvgDelay | Map | Per-field average typing delay |
 | avgInterFieldPauseMs | double | Inter-field hesitation (ms) |
 | deletionCount | int | Number of deletions |
-| deletionRatio | double | Deletion ratio (deletions / total text changes) |
+| deletionRatio | double | Deletion ratio |
 | fieldFocusSequence | string | Field focus order |
 | timeToFirstInput | long | Time from screen open to first input (ms) |
 | timeFromLastInputToConfirm | long | Time from last input to confirm (ms) |
 
-### 6.2 BehavioralProfile (unchanged from Android)
+**🆕 Phase 1 — FR-CL-05 (extracted from existing data):**
 
-No structural changes. In Phase 1A, Android sends full profile in request body. In Phase 1B, backend loads from storage. Backend needs a corresponding Pydantic model matching `BehavioralProfile.kt`.
+| Field | Type | Description |
+|-------|------|-------------|
+| typingSpeedTrend | double | Slope of windowed typing speed |
+| typingSpeedVariance | double | Variance of windowed typing speed |
+| memoryVsReferenceRatio | double | delay(accountNumber) / delay(note) |
+| burstCount | int | Fast-typing burst count |
+| avgBurstLength | double | Average burst length |
+| touchCentroidX | double | Mean touch x-coordinate |
+| touchCentroidY | double | Mean touch y-coordinate |
+| touchSpreadX | double | Std dev of touch x |
+| touchSpreadY | double | Std dev of touch y |
+| dominantSwipeDirection | string | Most frequent swipe direction |
+| avgSwipeLength | double | Average swipe distance (px) |
+| touchDurationStdDev | double | Std dev of touch durations |
+| longPressRatio | double | Ratio of long presses (>500ms) |
+| avgPitch | double | Mean device pitch angle (°) |
+| avgRoll | double | Mean device roll angle (°) |
+| pitchStdDev | double | Std dev of pitch |
+| rollStdDev | double | Std dev of roll |
+| orientationChangeRate | int | Count of >5° orientation changes |
+| maxOrientationShift | double | Max single-sample orientation change |
+| inactivityGapCount | int | Count of gaps >2000ms |
+| maxInactivityGapMs | long | Longest inactivity gap |
+| totalInactivityMs | long | Sum of inactivity gaps |
+| fieldRevisitCount | int | Field re-focus count |
+| hasBacktracking | boolean | Any field revisited |
+| timePerField | Map | Time per field (ms) |
 
-### 6.3 FraudAnalysisResult (extended)
+**🆕 Phase 2 — FR-CL-06 (new data collection):**
 
-Same structure as current `FraudAnalysisResult.kt`, plus additional fields from backend:
+| Field | Type | Description |
+|-------|------|-------------|
+| isCallActiveDuringSession | boolean | Phone call during session |
+| callStartedDuringSession | boolean | Call started after session start |
+| backgroundSwitchCount | int | App background/foreground switches |
+| totalBackgroundTimeMs | long | Total background time |
+| avgBackgroundDurationMs | double | Avg per-switch background time |
+| preSubmitHesitationCategory | string | NORMAL / RUSHED / HESITANT / UNKNOWN |
+| sessionHourOfDay | int | Hour (0-23) |
+| sessionDayOfWeek | int | Day (1-7) |
+| timeSinceLastSessionMs | long | Time since previous session |
+| deviceModel | string | Build.MODEL |
+| screenWidthPx | int | Screen width |
+| screenHeightPx | int | Screen height |
+| screenDensity | double | Display density |
+| batteryLevel | int | Battery % |
+| isCharging | boolean | Charging state |
+| multiTouchCount | int | Multi-pointer events |
+| maxPointerCount | int | Max simultaneous pointers |
 
-| Field | Type | Source | Description |
-|-------|------|--------|-------------|
-| riskScore | int | DSPy → RiskService | 0–100 |
-| riskLevel | string | RiskService (decision policy) | LOW / MEDIUM / HIGH |
-| anomalies | List<String> | DSPy | Detected anomalies |
-| explanation | string | DSPy | Detailed explanation |
-| recommendation | string | RiskService (decision policy) | APPROVE / STEP_UP_AUTH / BLOCK |
-| trace_id | string | Backend (new) | Request trace identifier |
-| model | string | Backend (new) | LLM model used |
-| latency_ms | int | Backend (new) | Processing time |
+**🆕 Phase 3 — FR-CL-07 (advanced analysis):**
 
----
+| Field | Type | Description |
+|-------|------|-------------|
+| avgTapAccelSpike | double | Grasp resistance |
+| avgTapRecoveryMs | double | Tap recovery time |
+| idleGyroRMS | double | Hand tremor metric |
+| idleAccelJitter | double | Idle accel variation |
+| correctionSameCount | int | Typo-fix corrections |
+| correctionDifferentCount | int | Content-change corrections |
+| screenshotDuringInput | boolean | Screenshot while inputting |
 
-## 7. Backend Directory Structure
+**Total: 25 existing + 25 Phase 1 + 17 Phase 2 + 7 Phase 3 = 74 fields**
 
-```
-backend/
-├── app/
-│   ├── main.py                    # FastAPI app entry point
-│   ├── api/
-│   │   └── routes_risk.py         # 3 routes: enroll, score, get profile
-│   ├── domain/
-│   │   └── schemas.py             # Pydantic request/response models
-│   ├── services/
-│   │   └── risk_service.py        # Orchestration + decision policy
-│   ├── dspy_programs/
-│   │   ├── signatures.py          # DSPy Signatures (2 Signatures)
-│   │   └── programs.py            # DSPy Programs (2 Programs)
-│   └── core/
-│       ├── config.py              # Settings from .env
-│       └── logging.py             # Structured logging setup
-├── .env                           # LLM_MODEL, OPENROUTER_API_KEY, ...
-├── requirements.txt
-└── README.md
-```
-
-Note: No `llm/` directory in Phase 1. Model calling goes through `dspy.LM()` configured in `config.py`. Phase 2 adds abstraction layer only if needed.
-
----
-
-## 8. Team Assignment
-
-### 8.1 Backend Team
-
-| # | REQ ID | Task | Effort | Priority |
-|---|--------|------|--------|----------|
-| 1 | FR-BE-07 | Spike test dspy.LM() + OpenRouter | 0.5 day | P0 |
-| 2 | FR-BE-01 | POST /risk/score (route + RiskService + RiskScoringProgram) | 4–5 days | P0 |
-| 3 | FR-BE-06 | Decision policy in RiskService | Included in #2 | P0 |
-| 4 | FR-BE-02 | POST /profile/enroll (route + ProfileBuilderProgram) | 3–4 days | P0 |
-| 5 | FR-BE-03 | GET /profile/{user_id} | 0.5 day | P1 |
-| 6 | FR-BE-08 | Logging and observability | 1 day | P1 |
-| 7 | FR-BE-04/05 | Unit tests for DSPy programs and RiskService | 1–2 days | P1 |
-
-### 8.2 Client Team (Android)
-
-| # | REQ ID | Task | Effort | Priority |
-|---|--------|------|--------|----------|
-| 1 | FR-CL-01 | Create BackendClient.kt (replace OpenRouterClient.kt) | 1 day | P0 |
-| 2 | FR-CL-02 | Update TransferViewModel.kt (replace llmClient with backendClient) | 0.5 day | P0 |
-| 3 | FR-CL-03 | Remove API key from build.gradle.kts and BuildConfig | 0.5 day | P0 |
-| 4 | FR-CL-04 | Fix ProfileScreen.kt bug (avgGyroStability/avgAccelStability) | 0.5 day | P1 |
-| 5 | — | Integration test with backend (end-to-end) | 1–2 days | P1 |
-
-### 8.3 Dependencies
-
-- Backend and client can work in parallel for most tasks.
-- Client needs running backend API for integration test. Backend should provide OpenAPI spec early so client can code against contract.
-- Client can use MockWebServer for independent testing while waiting for backend.
-- Backend task #1 (spike test) must complete before all other backend tasks.
+> Backend `BehavioralFeatures` Pydantic model phải cập nhật tương ứng. Tất cả fields mới PHẢI có default value để backward-compatible (client cũ gửi lên thiếu field → backend không lỗi).
 
 ---
 
-## 9. Android File Change Checklist
+## Update: Section 10.2 — Acceptance Criteria — Android Client
 
-| File | Action | Detail |
-|------|--------|--------|
-| `network/OpenRouterClient.kt` | DELETE | Replace with BackendClient.kt. Keep old file in separate branch for reference. |
-| `network/BackendClient.kt` | NEW | 3 methods: enrollSession(), verifyTransaction(), getProfile(). POST/GET to FastAPI. |
-| `ui/screens/TransferViewModel.kt` | MODIFY | Replace llmClient with backendClient. Keep state machine, keep LocalScorer fallback. |
-| `app/build.gradle.kts` | MODIFY | Remove OPENROUTER_API_KEY. Add BACKEND_BASE_URL to BuildConfig. |
-| `ui/screens/ProfileScreen.kt` | MODIFY | Fix reference to avgGyroStability / avgAccelStability → per-axis fields. |
-| `data/collector/BehavioralCollector.kt` | KEEP | No changes. |
-| `data/model/BehavioralModels.kt` | KEEP | No changes. |
-| `data/scorer/LocalScorer.kt` | KEEP | No changes. Still serves as offline fallback. |
-| `data/repository/ProfileRepository.kt` | KEEP | No changes in Phase 1A. Modify if moving to Phase 1B. |
-| `ui/screens/HomeScreen.kt` | KEEP | No changes. |
-| `ui/screens/TransferScreen.kt` | KEEP | No changes. |
-| `ui/theme/Theme.kt` | KEEP | No changes. |
-| `MainActivity.kt` | KEEP | No changes. |
+> Append thêm vào danh sách hiện tại.
 
-**Summary: 1 new, 3 modify, 1 delete, 8 keep.**
-
----
-
-## 10. Acceptance Criteria
-
-### 10.1 Backend
-
-1. Spike test: `dspy.LM()` calls OpenRouter and returns valid response
-2. `POST /risk/score` returns JSON matching response schema with risk_score, risk_level, recommendation, trace_id
-3. Decision policy correct: score 25 → APPROVE, score 50 → STEP_UP_AUTH, score 80 → BLOCK
-4. `POST /profile/enroll`: first 2 calls return pending, 3rd returns completed with profile
-5. `GET /profile/{user_id}` returns profile or 404
-6. Every request has structured log with trace_id, latency_ms, model, risk_score
-7. Changing `LLM_MODEL` in `.env` and restarting changes the model used (no code change)
-
-### 10.2 Android Client
-
-1. App calls backend instead of OpenRouter directly
-2. No API key in APK (grep BuildConfig shows no OPENROUTER_API_KEY)
-3. Enrollment 3 times → profile created successfully (via backend)
-4. Verification returns results of same quality as old architecture (same input, same model)
-5. When backend unreachable, LocalScorer still works (fallback)
-6. ProfileScreen displays correctly (no compile error, no crash)
-
-### 10.3 Integration
-
-1. End-to-end: Android enrollment 3x → backend creates profile → Android verification → backend returns score
-2. Demo scenario: same person → low score; different person → high score
-3. Overall latency not significantly increased compared to old architecture (same model, same OpenRouter)
+7. Phase 1 features: `extractFeatures()` trả về tất cả 25 features mới với giá trị hợp lệ (không phải tất cả 0 khi có input)
+8. Phase 2 features: `isCallActiveDuringSession` phát hiện đúng cuộc gọi đang diễn ra; `backgroundSwitchCount` tăng đúng khi chuyển app
+9. Phase 3 features: `avgTapAccelSpike` khác 0 khi tap trên thiết bị cầm tay; `idleGyroRMS` gần 0 trên bàn
+10. Tất cả features mới serialize thành JSON và backend Pydantic model parse thành công
+11. Backend `BehavioralFeatures` model backward-compatible — client cũ không có fields mới → default values, không lỗi 422

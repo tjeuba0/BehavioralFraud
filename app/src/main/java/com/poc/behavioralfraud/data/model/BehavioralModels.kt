@@ -115,7 +115,40 @@ data class BehavioralFeatures(
     // Navigation
     val fieldFocusSequence: String,
     val timeToFirstInput: Long,
-    val timeFromLastInputToConfirm: Long
+    val timeFromLastInputToConfirm: Long,
+
+    // Phase 1 — Enhanced Keystroke (FR-CL-05)
+    val typingSpeedTrend: Double = 0.0,
+    val typingSpeedVariance: Double = 0.0,
+    val memoryVsReferenceRatio: Double = 0.0,
+    val burstCount: Int = 0,
+    val avgBurstLength: Double = 0.0,
+
+    // Phase 1 — Enhanced Touch
+    val touchCentroidX: Double = 0.0,
+    val touchCentroidY: Double = 0.0,
+    val touchSpreadX: Double = 0.0,
+    val touchSpreadY: Double = 0.0,
+    val dominantSwipeDirection: String = "NONE",
+    val avgSwipeLength: Double = 0.0,
+    val touchDurationStdDev: Double = 0.0,
+    val longPressRatio: Double = 0.0,
+
+    // Phase 1 — Enhanced Motion
+    val avgPitch: Double = 0.0,
+    val avgRoll: Double = 0.0,
+    val pitchStdDev: Double = 0.0,
+    val rollStdDev: Double = 0.0,
+    val orientationChangeRate: Int = 0,
+    val maxOrientationShift: Double = 0.0,
+
+    // Phase 1 — Enhanced Navigation
+    val inactivityGapCount: Int = 0,
+    val maxInactivityGapMs: Long = 0L,
+    val totalInactivityMs: Long = 0L,
+    val fieldRevisitCount: Int = 0,
+    val hasBacktracking: Boolean = false,
+    val timePerField: Map<String, Long> = emptyMap()
 )
 
 /**

@@ -16,6 +16,9 @@
 | TASK-004 | Sửa bug ProfileScreen.kt | FR-CL-04 | P1 | done | none |
 | TASK-005 | Integration test end-to-end | Section 10.3 | P1 | done | TASK-002, TASK-003, BE-deployed |
 | TASK-006 | DEBUG-level request/response logging in BackendClient | — | P1 | done | TASK-001 |
+| TASK-007 | Phase 1: Enhanced feature extraction | FR-CL-05 | P1 | done | none |
+| TASK-008 | Phase 2: Cognitive & intent signals | FR-CL-06 | P1 | planned | TASK-007 |
+| TASK-009 | Phase 3: Advanced motion & pattern analysis | FR-CL-07 | P2 | planned | TASK-008 |
 
 > **BE-API-ready**: Backend đã có OpenAPI spec hoặc ít nhất POST /risk/score và POST /profile/enroll chạy được.  
 > **BE-deployed**: Backend chạy được (localhost hoặc remote) để Android gọi thật.
@@ -255,8 +258,8 @@ ProfileMetric("Gyro stability", String.format("%.6f", avgGyro), "Trung bình 3 t
 | `ui/screens/TransferViewModel.kt` | MODIFY | TASK-002 |
 | `app/build.gradle.kts` | MODIFY | TASK-003 |
 | `ui/screens/ProfileScreen.kt` | MODIFY | TASK-004 |
-| `data/collector/BehavioralCollector.kt` | KEEP | — |
-| `data/model/BehavioralModels.kt` | KEEP | — |
+| `data/collector/BehavioralCollector.kt` | MODIFY | TASK-007, 008, 009 |
+| `data/model/BehavioralModels.kt` | MODIFY | TASK-007, 008, 009 |
 | `data/scorer/LocalScorer.kt` | KEEP | — |
 | `data/repository/ProfileRepository.kt` | KEEP | — |
 | `ui/screens/HomeScreen.kt` | KEEP | — |
@@ -290,3 +293,25 @@ ProfileMetric("Gyro stability", String.format("%.6f", avgGyro), "Trung bình 3 t
 - [ ] Log ở DEBUG level (không leak trong release)
 - [ ] Không log sensitive data ở INFO/WARN/ERROR
 - [ ] trace_id từ response được log cùng
+
+---
+
+### TASK-007: Phase 1 — Enhanced Feature Extraction
+
+- **SRS section:** FR-CL-05
+- **Branch:** `feat/enhanced-features-p1`
+- **Dependencies:** none
+- **Status:** done
+
+**Goal:** Thêm 25 features mới vào `BehavioralFeatures` và implement extraction từ raw data đã có. Không thay đổi data collection.
+
+**File thay đổi:**
+- MODIFY: `data/model/BehavioralModels.kt` — thêm 25 fields vào data class
+- MODIFY: `data/collector/BehavioralCollector.kt` → `extractFeatures()` — thêm computation
+
+**Done when:**
+- [x] 25 fields mới trong `BehavioralFeatures` data class
+- [x] `extractFeatures()` compute tất cả 25
+- [x] Existing features giữ nguyên
+- [x] JSON serialize/deserialize OK
+- [x] App compile + chạy không crash
