@@ -18,7 +18,7 @@
 | TASK-006 | DEBUG-level request/response logging in BackendClient | — | P1 | done | TASK-001 |
 | TASK-007 | Phase 1: Enhanced feature extraction | FR-CL-05 | P1 | done | none |
 | TASK-008 | Phase 2: Cognitive & intent signals | FR-CL-06 | P1 | done | TASK-007 |
-| TASK-009 | Phase 3: Advanced motion & pattern analysis | FR-CL-07 | P2 | planned | TASK-008 |
+| TASK-009 | Phase 3: Advanced motion & pattern analysis | FR-CL-07 | P2 | done | TASK-008 |
 
 > **BE-API-ready**: Backend đã có OpenAPI spec hoặc ít nhất POST /risk/score và POST /profile/enroll chạy được.  
 > **BE-deployed**: Backend chạy được (localhost hoặc remote) để Android gọi thật.

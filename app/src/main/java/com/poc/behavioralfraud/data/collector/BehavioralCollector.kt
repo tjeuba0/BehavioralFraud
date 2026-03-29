@@ -2,12 +2,16 @@ package com.poc.behavioralfraud.data.collector
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.database.ContentObserver
 import android.hardware.Sensor
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.media.AudioManager
 import android.os.BatteryManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.provider.MediaStore
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import com.poc.behavioralfraud.data.model.*
@@ -71,6 +75,11 @@ class BehavioralCollector(private val context: Context) : DefaultLifecycleObserv
     private var sessionDow = 1
     private var timeSinceLastSession = -1L
 
+    // Phase 3 — Screenshot detection (FR-CL-07 REQ-07)
+    @Volatile
+    private var screenshotDetected = false
+    private var screenshotObserver: ContentObserver? = null
+
     // Sensor listener
     private val sensorListener = object : SensorEventListener {
         override fun onSensorChanged(event: android.hardware.SensorEvent) {
@@ -94,8 +103,6 @@ class BehavioralCollector(private val context: Context) : DefaultLifecycleObserv
         override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
     }
 
-    // --- Lifecycle callbacks for background tracking ---
-
     override fun onPause(owner: LifecycleOwner) { onPause() }
     override fun onResume(owner: LifecycleOwner) { onResume() }
 
@@ -116,29 +123,19 @@ class BehavioralCollector(private val context: Context) : DefaultLifecycleObserv
         checkCallState()
     }
 
-    /**
-     * Start collecting behavioral data
-     */
     fun startSession() {
-        // Stop any previous session to prevent double-registered listeners
         isCollecting = false
         sensorManager.unregisterListener(sensorListener)
+        unregisterScreenshotObserver()
 
-        // Clear previous data
-        touchEvents.clear()
-        textChangeEvents.clear()
-        sensorEvents.clear()
-        navigationEvents.clear()
+        touchEvents.clear(); textChangeEvents.clear()
+        sensorEvents.clear(); navigationEvents.clear()
 
-        // Reset Phase 2 state
-        callActiveAtStart = false
-        isCallActiveFlag = false
-        callStartedFlag = false
-        bgSwitchCount = 0
-        totalBgTimeMs = 0L
-        backgroundPauseTime = 0L
-        multiTouchEventCount = 0
-        maxPointerCountObserved = 0
+        // Reset state
+        callActiveAtStart = false; isCallActiveFlag = false; callStartedFlag = false
+        bgSwitchCount = 0; totalBgTimeMs = 0L; backgroundPauseTime = 0L
+        multiTouchEventCount = 0; maxPointerCountObserved = 0
+        screenshotDetected = false
 
         sessionId = UUID.randomUUID().toString().take(8)
         sessionStartTime = System.currentTimeMillis()
@@ -171,6 +168,9 @@ class BehavioralCollector(private val context: Context) : DefaultLifecycleObserv
             sensorManager.registerListener(sensorListener, it, SensorManager.SENSOR_DELAY_GAME)
         }
 
+        // Phase 3 — Register screenshot observer (REQ-07)
+        registerScreenshotObserver()
+
         navigationEvents.add(
             NavigationEvent(
                 timestamp = sessionStartTime,
@@ -180,11 +180,7 @@ class BehavioralCollector(private val context: Context) : DefaultLifecycleObserv
         )
     }
 
-    /**
-     * Stop collecting and unregister sensors
-     */
     fun stopSession() {
-        // Account for partial background time if still in background
         if (backgroundPauseTime > 0) {
             totalBgTimeMs += System.currentTimeMillis() - backgroundPauseTime
             backgroundPauseTime = 0L
@@ -193,6 +189,9 @@ class BehavioralCollector(private val context: Context) : DefaultLifecycleObserv
         sessionEndTime = System.currentTimeMillis()
         isCollecting = false
         sensorManager.unregisterListener(sensorListener)
+
+        // Phase 3 — Unregister screenshot observer
+        unregisterScreenshotObserver()
 
         // Phase 2 — Final call state check
         checkCallState()
@@ -211,9 +210,6 @@ class BehavioralCollector(private val context: Context) : DefaultLifecycleObserv
         )
     }
 
-    /**
-     * Record a touch event from MotionEvent
-     */
     fun onTouchEvent(
         action: Int,
         x: Float,
@@ -244,9 +240,6 @@ class BehavioralCollector(private val context: Context) : DefaultLifecycleObserv
         )
     }
 
-    /**
-     * Record a text change event from TextField onValueChange
-     */
     fun onTextChanged(
         fieldName: String,
         previousLength: Int,
@@ -267,9 +260,6 @@ class BehavioralCollector(private val context: Context) : DefaultLifecycleObserv
         )
     }
 
-    /**
-     * Record field focus event
-     */
     fun onFieldFocus(fieldName: String) {
         if (!isCollecting) return
         navigationEvents.add(
@@ -281,9 +271,6 @@ class BehavioralCollector(private val context: Context) : DefaultLifecycleObserv
         )
     }
 
-    /**
-     * Get the complete session data
-     */
     fun getSession(transaction: TransactionInfo): BehavioralSession {
         return BehavioralSession(
             sessionId = sessionId,
@@ -297,12 +284,6 @@ class BehavioralCollector(private val context: Context) : DefaultLifecycleObserv
         )
     }
 
-    /**
-     * Extract computed features from raw data.
-     *
-     * @param profile Optional enrollment profile for baseline comparison (REQ-06)
-     * @param enrollmentFeatures Optional enrollment features for std dev computation (REQ-06)
-     */
     fun extractFeatures(
         profile: BehavioralProfile? = null,
         enrollmentFeatures: List<BehavioralFeatures> = emptyList()
@@ -325,6 +306,13 @@ class BehavioralCollector(private val context: Context) : DefaultLifecycleObserv
         val hesitationCategory = computeHesitationCategory(
             base.timeFromLastInputToConfirm, profile, enrollmentFeatures
         )
+
+        // === Phase 3: Advanced Motion & Pattern Analysis (FR-CL-07) ===
+        val motionAdv = computeMotionAdvanced(
+            base.downEvents, touchSnapshot, base.accelEvents, base.gyroEvents,
+            sessionStartTime, endTime
+        )
+        val cognitiveAdv = computeCognitiveAdvanced(base.sortedTextEvents)
 
         return BehavioralFeatures(
             sessionDurationMs = endTime - sessionStartTime,
@@ -397,7 +385,15 @@ class BehavioralCollector(private val context: Context) : DefaultLifecycleObserv
             isCharging = isChargingValue,
             // Phase 2 — Touch addition
             multiTouchCount = multiTouchEventCount,
-            maxPointerCount = maxPointerCountObserved
+            maxPointerCount = maxPointerCountObserved,
+            // Phase 3 — Advanced Motion & Pattern Analysis
+            avgTapAccelSpike = motionAdv.avgTapAccelSpike,
+            avgTapRecoveryMs = motionAdv.avgTapRecoveryMs,
+            idleGyroRMS = motionAdv.idleGyroRMS,
+            idleAccelJitter = motionAdv.idleAccelJitter,
+            correctionSameCount = cognitiveAdv.correctionSameCount,
+            correctionDifferentCount = cognitiveAdv.correctionDifferentCount,
+            screenshotDuringInput = screenshotDetected
         )
     }
 
@@ -431,20 +427,44 @@ class BehavioralCollector(private val context: Context) : DefaultLifecycleObserv
         isChargingValue = batteryManager?.isCharging ?: false
     }
 
-    /**
-     * Add a sensor event for testing (no SensorManager needed)
-     */
-    internal fun addSensorEventForTest(event: SensorEvent) {
-        sensorEvents.add(event)
+    // --- Phase 3 private helpers ---
+
+    // Note: ContentObserver fires for ANY image write to MediaStore (not just screenshots).
+    // For production, filter by path containing "screenshot". Acceptable for POC per SRS.
+    private fun registerScreenshotObserver() {
+        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) {
+                if (isCollecting) screenshotDetected = true
+            }
+        }
+        screenshotObserver = observer
+        try {
+            context.contentResolver.registerContentObserver(
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                true,
+                observer
+            )
+        } catch (_: Exception) {
+            // Some devices may restrict ContentObserver — acceptable for POC
+        }
     }
 
-    /**
-     * Get raw event counts for debug display
-     */
+    private fun unregisterScreenshotObserver() {
+        screenshotObserver?.let {
+            try {
+                context.contentResolver.unregisterContentObserver(it)
+            } catch (_: Exception) {}
+        }
+        screenshotObserver = null
+    }
+
+    // --- Test helpers ---
+    internal fun addSensorEventForTest(event: SensorEvent) { sensorEvents.add(event) }
+    internal fun addTouchEventForTest(event: TouchEvent) { touchEvents.add(event) }
+    internal fun setScreenshotDetectedForTest(detected: Boolean) { screenshotDetected = detected }
+
     fun getEventCounts(): Map<String, Int> = mapOf(
-        "touch" to touchEvents.size,
-        "textChange" to textChangeEvents.size,
-        "sensor" to sensorEvents.size,
-        "navigation" to navigationEvents.size
+        "touch" to touchEvents.size, "textChange" to textChangeEvents.size,
+        "sensor" to sensorEvents.size, "navigation" to navigationEvents.size
     )
 }
