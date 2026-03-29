@@ -76,12 +76,14 @@ class TransferViewModel(application: Application) : AndroidViewModel(application
      */
     fun submitTransfer(accountNumber: String, amount: String, note: String) {
         collector.stopSession()
-        val features = collector.extractFeatures()
-
         _uiState.value = TransferUiState.Analyzing
 
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
+                // Profile + enrollment features read on IO thread for Phase 2 hesitation (REQ-06)
+                val currentProfile = repository.getProfile()
+                val enrollmentFeatures = repository.getEnrollmentFeaturesList()
+                val features = collector.extractFeatures(currentProfile, enrollmentFeatures)
                 try {
                     val currentCount = repository.getEnrollmentCount()
                     if (currentCount < MIN_ENROLLMENT) {
@@ -117,7 +119,6 @@ class TransferViewModel(application: Application) : AndroidViewModel(application
                             backendClient.verifyTransaction("default_user", features, profile)
                         } catch (e: Exception) {
                             // Fallback to local Z-score scoring when backend is unavailable
-                            val enrollmentFeatures = repository.getEnrollmentFeaturesList()
                             localScorer.score(features, profile, enrollmentFeatures)
                         }
                         _uiState.value = TransferUiState.VerificationResult(

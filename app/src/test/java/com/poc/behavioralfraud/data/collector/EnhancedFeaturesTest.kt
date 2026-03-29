@@ -1,7 +1,12 @@
 package com.poc.behavioralfraud.data.collector
 
 import android.content.Context
+import android.content.SharedPreferences
+import android.content.res.Resources
 import android.hardware.SensorManager
+import android.media.AudioManager
+import android.os.BatteryManager
+import android.util.DisplayMetrics
 import com.poc.behavioralfraud.data.model.SensorEvent
 import io.mockk.every
 import io.mockk.mockk
@@ -43,8 +48,23 @@ class EnhancedFeaturesTest {
     @Before
     fun setup() {
         mockSensorManager = mockk(relaxed = true)
+        val mockAudioManager = mockk<AudioManager>(relaxed = true)
+        val mockBatteryManager = mockk<BatteryManager>(relaxed = true)
+        val mockPrefs = mockk<SharedPreferences>(relaxed = true)
+        val mockPrefsEditor = mockk<SharedPreferences.Editor>(relaxed = true)
+        val mockResources = mockk<Resources>(relaxed = true)
+        every { mockResources.displayMetrics } returns DisplayMetrics().apply {
+            widthPixels = 1080; heightPixels = 2340; density = 2.75f
+        }
+
         mockContext = mockk(relaxed = true)
         every { mockContext.getSystemService(Context.SENSOR_SERVICE) } returns mockSensorManager
+        every { mockContext.getSystemService(Context.AUDIO_SERVICE) } returns mockAudioManager
+        every { mockContext.getSystemService(Context.BATTERY_SERVICE) } returns mockBatteryManager
+        every { mockContext.resources } returns mockResources
+        every { mockContext.getSharedPreferences(any(), any()) } returns mockPrefs
+        every { mockPrefs.edit() } returns mockPrefsEditor
+        every { mockPrefsEditor.putLong(any(), any()) } returns mockPrefsEditor
 
         collector = BehavioralCollector(mockContext)
         collector.startSession()
