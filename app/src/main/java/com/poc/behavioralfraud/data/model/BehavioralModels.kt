@@ -148,7 +148,30 @@ data class BehavioralFeatures(
     val totalInactivityMs: Long = 0L,
     val fieldRevisitCount: Int = 0,
     val hasBacktracking: Boolean = false,
-    val timePerField: Map<String, Long> = emptyMap()
+    val timePerField: Map<String, Long> = emptyMap(),
+
+    // Phase 2 — Cognitive / Intent (FR-CL-06)
+    val isCallActiveDuringSession: Boolean = false,
+    val callStartedDuringSession: Boolean = false,
+    val backgroundSwitchCount: Int = 0,
+    val totalBackgroundTimeMs: Long = 0L,
+    val avgBackgroundDurationMs: Double = 0.0,
+    val preSubmitHesitationCategory: String = "UNKNOWN",
+    val sessionHourOfDay: Int = 0,
+    val sessionDayOfWeek: Int = 1,
+    val timeSinceLastSessionMs: Long = -1L,
+
+    // Phase 2 — Device context
+    val deviceModel: String = "",
+    val screenWidthPx: Int = 0,
+    val screenHeightPx: Int = 0,
+    val screenDensity: Double = 0.0,
+    val batteryLevel: Int = 0,
+    val isCharging: Boolean = false,
+
+    // Phase 2 — Touch (minor addition)
+    val multiTouchCount: Int = 0,
+    val maxPointerCount: Int = 0
 )
 
 /**

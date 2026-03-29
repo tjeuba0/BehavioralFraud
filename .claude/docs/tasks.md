@@ -17,7 +17,7 @@
 | TASK-005 | Integration test end-to-end | Section 10.3 | P1 | done | TASK-002, TASK-003, BE-deployed |
 | TASK-006 | DEBUG-level request/response logging in BackendClient | — | P1 | done | TASK-001 |
 | TASK-007 | Phase 1: Enhanced feature extraction | FR-CL-05 | P1 | done | none |
-| TASK-008 | Phase 2: Cognitive & intent signals | FR-CL-06 | P1 | planned | TASK-007 |
+| TASK-008 | Phase 2: Cognitive & intent signals | FR-CL-06 | P1 | done | TASK-007 |
 | TASK-009 | Phase 3: Advanced motion & pattern analysis | FR-CL-07 | P2 | planned | TASK-008 |
 
 > **BE-API-ready**: Backend đã có OpenAPI spec hoặc ít nhất POST /risk/score và POST /profile/enroll chạy được.  
