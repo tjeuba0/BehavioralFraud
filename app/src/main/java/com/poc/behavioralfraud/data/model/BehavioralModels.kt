@@ -171,7 +171,16 @@ data class BehavioralFeatures(
 
     // Phase 2 — Touch (minor addition)
     val multiTouchCount: Int = 0,
-    val maxPointerCount: Int = 0
+    val maxPointerCount: Int = 0,
+
+    // Phase 3 — Advanced Motion & Pattern Analysis (FR-CL-07)
+    val avgTapAccelSpike: Double = 0.0,
+    val avgTapRecoveryMs: Double = 0.0,
+    val idleGyroRMS: Double = 0.0,
+    val idleAccelJitter: Double = 0.0,
+    val correctionSameCount: Int = 0,
+    val correctionDifferentCount: Int = 0,
+    val screenshotDuringInput: Boolean = false
 )
 
 /**
