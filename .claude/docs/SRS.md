@@ -363,7 +363,7 @@ Output of on-device feature extraction, sent to backend as JSON. Backend needs c
 | REQ-05 | `IPayShapes` | data class | none/xsmall(8)/small(16)/medium(20)/large(24)/full(9999) + r4. |
 | REQ-06 | `IPayStroke` | data class | xs(1)/s(1.5)/md(1.75)/lg(2)/xl(4). |
 | REQ-07 | `IPayElevation` | data class | small (offset 0,-2 / blur 12) + large (offset 0,4 / blur 16) — match Figma `dropShadow/Small` & `Shadow/Large`. |
-| REQ-08 | `IPayTheme` | object + Composable | Public access (`IPayTheme.colors`, `.typography`, …). Wraps `MaterialTheme` để Material widgets vẫn nhận token. POC: chỉ light mode (skip dark). |
+| REQ-08 | `IPayTheme` | object + Composable | Public access (`IPayTheme.colors`, `.typography`, …). Wraps `MaterialTheme` để Material widgets vẫn nhận token. Composable provider chấp nhận `spec: IPayThemeSpec` param (xem REQ-24..27 — theme architecture). POC: chỉ implement light mode đầy đủ; Dark mode stub spec để chứng minh API support. |
 
 **New foundation components — under `ui/components/`:**
 
@@ -390,16 +390,35 @@ Output of on-device feature extraction, sent to backend as JSON. Backend needs c
 |--------|------|-------------|
 | REQ-23 | `DesignSystemPreviewScreen` | Showcase mọi token + component để dev/QA review. Sections: Color palette, Typography scale, Buttons, Inputs, Cards, Chips, Alerts, Bottom sheet trigger, Toggles, Selection cards, Tabs, Badges. **Truy cập qua Dev Menu** (long-press logo Home 1.5s → Dev Menu → Design System Preview). KHÔNG truy cập trực tiếp từ Home. |
 
+**Theme architecture for runtime switching (CRITICAL — 3-layer design):**
+
+> Design system phải tách bạch 3 tầng để hỗ trợ swap theme nhanh chóng (apply theme khác chỉ cần thay 1 spec, không sửa code component nào):
+> **Layer 1 — Palette** (primitives, hard-coded color values, KHÔNG dùng trực tiếp trong UI).
+> **Layer 2 — Semantic tokens** (data classes — colors/typography/spacing/etc., consume palette, dùng trực tiếp trong component).
+> **Layer 3 — Theme spec + registry** (bundle semantic tokens thành 1 spec, registry chứa nhiều variants, runtime switchable).
+
+| REQ-ID | Item | Description |
+|--------|------|-------------|
+| REQ-24 | `IPayThemeSpec` | Immutable data class bundle 6 token types: `colors: IPayColors`, `typography: IPayTypography`, `spacing: IPaySpacing`, `shapes: IPayShapes`, `stroke: IPayStroke`, `elevation: IPayElevation`. Định nghĩa "1 theme = 1 IPayThemeSpec instance". |
+| REQ-25 | `IPayThemes` | Singleton `object` registry chứa các theme variant định danh: tối thiểu `IPayThemes.Default` (light, full implementation theo Figma iPay) + `IPayThemes.Dark` (stub — có thể mirror Default cho POC, mục đích chứng minh API support multi-theme) + 1 demo variant `IPayThemes.Demo` (token khác hẳn Default — vd brand đỏ thay xanh — để test switchability). Adding new theme = thêm 1 entry mới vào object này, KHÔNG sửa code khác. |
+| REQ-26 | `IPayTheme(spec, content)` | `@Composable` provider, signature: `fun IPayTheme(spec: IPayThemeSpec = IPayThemes.Default, content: @Composable () -> Unit)`. Bên trong: tạo 6 `CompositionLocal<*>` (1 per token type) provided từ `spec`, đồng thời map sang `MaterialTheme(colorScheme, typography, shapes)` để Material widget tự động pick up khi spec đổi. Bao bọc `content` trong `CompositionLocalProvider(...)` rồi `MaterialTheme(...)`. Spec param có default → app top-level chỉ cần `IPayTheme { content }`. |
+| REQ-27 | `IPayTheme` (object accessor) | Singleton `object IPayTheme` expose properties đọc CompositionLocal: `IPayTheme.colors` `@Composable get()`, `IPayTheme.typography` `@Composable get()`, etc. Mọi component **chỉ** đọc token qua object này — KHÔNG nhận spec làm param, KHÔNG cache token. Khi spec ở provider đổi → mọi consumer recompose tự động. Hỗ trợ nested override: bọc subtree với `IPayTheme(spec = IPayThemes.Demo) { ... }` → subtree dùng tokens Demo, ngoài subtree giữ Default. |
+
 **Constraints:**
 
 - KHÔNG hard-code color, font, dp trong code feature — phải đi qua `IPayTheme.*`
 - KHÔNG dùng `clickable` trực tiếp — luôn `safeClickable` (CLAUDE.md mandatory)
 - Material3 vẫn là nền (cho `Scaffold`, `ModalBottomSheet`, `Snackbar`, …) — `IPayTheme` override `colorScheme`/`typography`/`shapes` cho Material widget không bị override
-- Dark mode: SKIP cho POC — wire signature tham số nhưng luôn light
+- Dark mode: implement đầy đủ ở mức API (REQ-25 stub Dark spec) nhưng skip filling Dark colors thật — POC luôn dùng Default. Khi cần ship Dark mode thật chỉ cần điền colors vào `IPayThemes.Dark`, không sửa code khác.
 - Không thêm dependency mới ngoài Compose BOM + Material3 đã có
 - File path: `app/src/main/java/com/poc/behavioralfraud/ui/theme/` (Color/Spacing/Shape/Typography/Stroke/Elevation/Theme) và `ui/components/` (mỗi component 1 file)
 - Mỗi component KHÔNG quá 250 dòng — tách helper nếu cần
 - Tất cả component public phải có `Modifier` parameter mặc định `Modifier`
+- **Theme switchability rules (mandatory):**
+  - Component KHÔNG được nhận token làm param — luôn đọc qua `IPayTheme.colors/.typography/...`
+  - Component KHÔNG được cache token (vd `val color = remember { IPayTheme.colors.brandPrimary }`) — recomposition phải re-read
+  - Spec phải immutable — đổi theme = swap reference toàn bộ spec, không mutate field
+  - Adding new theme = thêm 1 entry vào `IPayThemes` object, ZERO thay đổi component code
 
 **Affected files:**
 
@@ -434,6 +453,15 @@ Output of on-device feature extraction, sent to backend as JSON. Backend needs c
 - [ ] App compile + run + mở preview qua Dev Menu không crash
 - [ ] Mọi component có `Modifier` param đầu tiên không phải `text`/`onClick` (Compose convention)
 - [ ] Lint sạch (`./gradlew lint` không add warning mới)
+- [ ] **Theme architecture (REQ-24..27):**
+  - [ ] `IPayThemeSpec` data class tồn tại, bundle 6 token types
+  - [ ] `IPayThemes` object expose `Default` (full) + `Dark` (stub) + `Demo` (alternative palette)
+  - [ ] `IPayTheme(spec, content)` Composable accept spec param, default = `IPayThemes.Default`
+  - [ ] `IPayTheme` accessor object đọc 6 token types qua `CompositionLocal`
+  - [ ] **Runtime swap test**: `DesignSystemPreviewScreen` có button "Switch theme" cycle qua Default → Dark → Demo → Default; tất cả token + component update trong 1 frame, KHÔNG crash, KHÔNG cần reload screen
+  - [ ] **Nested override test**: bọc 1 subtree với `IPayTheme(spec = IPayThemes.Demo) { ... }` → subtree đó dùng tokens Demo, ngoài subtree giữ Default
+  - [ ] **Adding new theme test**: tạo 1 entry mới `IPayThemes.Test = IPayThemeSpec(...)` ở local branch — chứng minh KHÔNG cần sửa file component nào, chỉ cần tham chiếu spec mới ở provider
+  - [ ] Material3 mapping (`MaterialTheme(colorScheme/typography/shapes = ...)`) tự update khi spec đổi — verify bằng `Snackbar`/`AlertDialog` Material3 đổi màu theo spec mới
 
 ---
 

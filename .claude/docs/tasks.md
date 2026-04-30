@@ -346,21 +346,57 @@ ProfileMetric("Gyro stability", String.format("%.6f", avgGyro), "Trung bình 3 t
 
 ---
 
-### TASK-010: Design tokens
+### TASK-010: Design tokens + theme architecture
 
-- **SRS section:** FR-CL-08 (REQ-01..08)
+- **SRS section:** FR-CL-08 (REQ-01..08, REQ-24..27)
 - **Branch:** `feat/ipay-tokens`
 - **Dependencies:** none
 - **Status:** planned
 
-**Goal:** Setup toàn bộ design tokens dưới `ui/theme/` (Color, Spacing, Shape, Stroke, Elevation, Typography, Theme) — tiêu thụ qua `IPayTheme.*`.
+**Goal:** Setup design tokens 3-layer (palette → semantic → spec) + theme provider hỗ trợ runtime switching. Mọi component sau này tiêu thụ token qua `IPayTheme.colors/.typography/...` (object accessor đọc CompositionLocal).
+
+**Architecture overview:**
+```
+Layer 1 — Palette (primitives):    IPayPalette.vietinDarkBlue50 = Color(0xFF005BAA)
+                                       ↓ (consume)
+Layer 2 — Semantic tokens:         IPayColors(brandPrimary = ..., textPrimary = ..., ...)
+                                   IPayTypography, IPaySpacing, IPayShapes, IPayStroke, IPayElevation
+                                       ↓ (bundle)
+Layer 3a — Spec (immutable):       IPayThemeSpec(colors, typography, spacing, shapes, stroke, elevation)
+Layer 3b — Registry:               IPayThemes.Default / .Dark / .Demo
+                                       ↓ (provide)
+Provider Composable:               IPayTheme(spec) { CompositionLocalProvider(...) { MaterialTheme(...) { content } } }
+                                       ↓ (consume via accessor)
+Component code:                    Box(Modifier.background(IPayTheme.colors.brandPrimary))
+```
 
 **Done when:**
-- [ ] 7 file token compile, không hard-code literal trong screen
-- [ ] `IPayTheme` provide 6 CompositionLocal (colors, spacing, typography, shapes, stroke, elevation)
-- [ ] `BehavioralFraudTheme` alias còn tồn tại để MainActivity không vỡ
-- [ ] Material3 colorScheme/typography/shapes mapped từ IPay tokens
+
+*Token files (REQ-01..07):*
+- [ ] 7 file token compile (Color, Spacing, Shape, Stroke, Elevation, Typography, Theme)
+- [ ] `IPayPalette` object — primitives, hard-coded color values, KHÔNG dùng trực tiếp trong UI
+- [ ] `IPayColors` data class — semantic tokens consume palette
+- [ ] `IPayTypography`, `IPaySpacing`, `IPayShapes`, `IPayStroke`, `IPayElevation` data class
 - [ ] Font fallback `FontFamily.SansSerif` + comment chỗ swap khi có SVN-Gilroy ttf
+
+*Theme architecture (REQ-24..27):*
+- [ ] `IPayThemeSpec` data class bundle 6 token types
+- [ ] `IPayThemes` object expose 3 variant: `Default` (full iPay light), `Dark` (stub — có thể mirror Default), `Demo` (alternative palette — vd brand đỏ thay xanh để test switchability)
+- [ ] `IPayTheme(spec: IPayThemeSpec = IPayThemes.Default, content: @Composable () -> Unit)` provider Composable
+- [ ] 6 `CompositionLocal<*>` (1 per token type) provided từ spec bên trong provider
+- [ ] `IPayTheme` object accessor — properties `@Composable get()` đọc từ CompositionLocal
+- [ ] `MaterialTheme(colorScheme, typography, shapes)` map từ spec, wrap content
+
+*Switchability proof:*
+- [ ] **Demo runtime switch**: temp button trong app (hoặc test fixture) cycle Default→Dark→Demo→Default, mọi consumer recompose trong 1 frame không crash
+- [ ] **Nested override**: bọc subtree với `IPayTheme(spec = IPayThemes.Demo) { ... }` → subtree dùng Demo tokens, ngoài subtree giữ Default — verify bằng 2 Box màu khác nhau
+
+*Compatibility:*
+- [ ] `BehavioralFraudTheme` alias còn tồn tại để MainActivity hiện tại không vỡ (proxy về `IPayTheme()` với default spec)
+- [ ] Material3 colorScheme/typography/shapes mapped từ IPay tokens — Material widget (Snackbar/Dialog) tự lấy đúng màu
+
+*Lint:*
+- [ ] Component (sau này) đọc token chỉ qua `IPayTheme.*` — KHÔNG nhận token qua param, KHÔNG cache trong remember (rule này enforce ở TASK-011..013)
 
 ---
 
