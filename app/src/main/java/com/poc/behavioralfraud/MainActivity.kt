@@ -33,6 +33,7 @@ fun AppNavigation() {
             profile = profile,
             onNavigateToTransfer = { currentScreen = "transfer" },
             onNavigateToProfile = { currentScreen = "profile" },
+            onNavigateToThemePreview = { currentScreen = "theme-preview" },
             onClearData = { viewModel.clearAllData() }
         )
         "transfer" -> TransferScreen(
@@ -43,5 +44,8 @@ fun AppNavigation() {
             profile = profile,
             onBack = { currentScreen = "home" }
         )
+        // TASK-010 temp route — proof of theme architecture; folded into
+        // DesignSystemPreviewScreen at TASK-014.
+        "theme-preview" -> ThemePreviewScreen(onBack = { currentScreen = "home" })
     }
 }
