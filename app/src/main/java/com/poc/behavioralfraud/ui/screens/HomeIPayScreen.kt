@@ -307,7 +307,7 @@ private fun MembershipBadge(level: String, onClick: () -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(HomeIPay.Sp.S4),
     ) {
         Icon(
-            painter = painterResource(R.drawable.ic_membership_crown),
+            painter = painterResource(R.drawable.ic_membership_diamond),
             contentDescription = null,
             tint = Color.Unspecified,
             modifier = Modifier.size(HomeIPay.Size.IconXS),
