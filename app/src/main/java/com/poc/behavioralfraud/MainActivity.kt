@@ -18,6 +18,9 @@ import com.poc.behavioralfraud.ui.screens.ProfileScreen
 import com.poc.behavioralfraud.ui.screens.TransferScreen
 import com.poc.behavioralfraud.ui.screens.TransferViewModel
 import com.poc.behavioralfraud.ui.screens.login.LoginScreen
+import com.poc.behavioralfraud.ui.screens.transfer.RecipientScreen
+import com.poc.behavioralfraud.ui.screens.transfer.TransferType
+import com.poc.behavioralfraud.ui.screens.transfer.TransferTypeScreen
 import com.poc.behavioralfraud.ui.theme.BehavioralFraudTheme
 
 /**
@@ -74,6 +77,29 @@ fun AppNavigation() {
         composable(AppRoutes.HOME) {
             HomeRoute(navController = navController, viewModel = viewModel)
         }
+        composable(AppRoutes.TRANSFER_TYPE) {
+            TransferTypeScreen(
+                onTypeSelected = { type ->
+                    navController.navigate("${AppRoutes.TRANSFER_RECIPIENT}/${type.name}")
+                },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable("${AppRoutes.TRANSFER_RECIPIENT}/{transferType}") { backStackEntry ->
+            val typeName = backStackEntry.arguments?.getString("transferType")
+                ?: TransferType.Internal.name
+            val transferType = runCatching { TransferType.valueOf(typeName) }
+                .getOrDefault(TransferType.Internal)
+            RecipientScreen(
+                transferType = transferType,
+                onContinue = { _, _ ->
+                    // TASK-019 will route to TRANSFER_FORM. For now navigate to
+                    // legacy transfer screen so app remains functional.
+                    navController.navigate(AppRoutes.TRANSFER_LEGACY)
+                },
+                onBack = { navController.popBackStack() },
+            )
+        }
         composable(AppRoutes.TRANSFER_LEGACY) {
             TransferScreen(
                 viewModel = viewModel,
@@ -103,7 +129,7 @@ private fun HomeRoute(
     // viewModel is kept on the route signature so TASK-023 can wire
     // `collector.startSession()` here when the user taps "Chuyển tiền trong nước".
     HomeIPayScreen(
-        onNavigateToTransfer = { navController.navigate(AppRoutes.TRANSFER_LEGACY) },
+        onNavigateToTransfer = { navController.navigate(AppRoutes.TRANSFER_TYPE) },
         onNavigateToDevPreview = { navController.navigate(AppRoutes.DESIGN_SYSTEM_LEGACY) },
     )
 }
