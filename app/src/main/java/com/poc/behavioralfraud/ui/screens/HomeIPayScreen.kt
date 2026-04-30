@@ -907,9 +907,17 @@ private fun AIShortcutChip(text: String, onClick: () -> Unit) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Section: Financial Overview Card (Figma 1:15589, 343×339)
-// Placeholder card — full design context not pulled to conserve context budget.
-// Shows section heading + body text. Reasonable layout from metadata.
+// Section: Financial Overview Card "Quản lý tài chính cá nhân" (Figma 1:10807)
+// Layout (top to bottom):
+//   1. Title row: "Quản lý tài chính cá nhân" + subtitle + chevron icon
+//   2. Tooltip badge (right-aligned): black pill "Chi tăng 19% so với tháng 6"
+//      with arrow pointing down + connection dot
+//   3. Two horizontal bars: red "Chi" 200dp (gradient red40→red60) over blue "Thu"
+//      full-width (gradient darkBlue30→darkBlue70). Vertical black divider at x=200.
+//   4. Scale labels: 0 / 10 tr / 20 tr / 30 tr (4 evenly spaced)
+//   5. Bottom amounts row: Chi icon + "17,390,000 VND" left | Thu icon + "30,290,000 VND" right
+//   6. Divider
+//   7. Footer: reload icon + timestamp left | "Lên kế hoạch" ghost button right
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
@@ -919,35 +927,277 @@ private fun HomeFinancialOverviewCard() {
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = HomeIPay.Sp.S16),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(HomeIPay.Sp.S12),
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(HomeIPay.Sp.S12)) {
+        Column(verticalArrangement = Arrangement.spacedBy(HomeIPay.Sp.S16)) {
+            FinanceCardTitleRow()
+            FinanceCardChartArea()
+            FinanceCardDivider()
+            FinanceCardFooter()
+        }
+    }
+}
+
+@Composable
+private fun FinanceCardTitleRow() {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(HomeIPay.Sp.S16),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Column(
+            modifier = Modifier.weight(1f),
+        ) {
             Text(
-                text = "Tài chính cá nhân",
+                text = "Quản lý tài chính cá nhân",
                 style = IPayTheme.typography.titleLarge,
                 color = IPayTheme.colors.textNeutralPrimary,
             )
             Text(
-                text = "Theo dõi thu chi, đầu tư và tiết kiệm chỉ trong một nơi.",
+                text = "Tất cả các tài khoản thanh toán",
                 style = IPayTheme.typography.bodyMedium,
-                color = IPayTheme.colors.textNeutralSecondary,
+                color = IPayTheme.colors.textNeutralTertiary,
             )
-            // Placeholder content area — Figma has additional charts/widgets here
-            // that require pulling design context for node 1:15589.
+        }
+        Icon(
+            painter = painterResource(R.drawable.ic_finance_chevron),
+            contentDescription = "Mở chi tiết",
+            tint = Color.Unspecified,
+            modifier = Modifier.size(HomeIPay.Size.IconL),
+        )
+    }
+}
+
+@Composable
+private fun FinanceCardChartArea() {
+    // Two-bar chart with tooltip badge floating above the Chi bar end (200dp).
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.End,
+        verticalArrangement = Arrangement.spacedBy(HomeIPay.Sp.S12),
+    ) {
+        FinanceTooltipBadge()
+        FinanceChartBars()
+        FinanceChartScale()
+        FinanceAmountsRow()
+    }
+}
+
+@Composable
+private fun FinanceTooltipBadge() {
+    // Black pill 213×31 with chip + text, arrow at left=88, dot at left=92
+    Box(
+        modifier = Modifier
+            .width(213.dp)
+            .height(45.dp),
+    ) {
+        // Pill at top
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(percent = 50))
+                .background(IPayPalette.Ink90)
+                .padding(start = HomeIPay.Sp.S6, end = HomeIPay.Sp.S8, top = 6.dp, bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(HomeIPay.Sp.S4),
+        ) {
+            // Inner chip: Ink60 circle with frame icon
+            Box(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(IPayPalette.Ink60)
+                    .padding(2.dp)
+                    .size(16.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_finance_chip),
+                    contentDescription = null,
+                    tint = Color.Unspecified,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            Text(
+                text = "Chi tăng 19% so với tháng 6",
+                style = IPayTheme.typography.bodySmall,
+                color = Color.White,
+            )
+        }
+        // Arrow pointing down (polygon) — 14×14 at left=88, top=24
+        Icon(
+            painter = painterResource(R.drawable.ic_polygon_down),
+            contentDescription = null,
+            tint = Color.Unspecified,
+            modifier = Modifier
+                .size(14.dp)
+                .offset(x = 88.dp, y = 24.dp),
+        )
+        // Connection dot — 6×6 at left=92, top=39
+        Box(
+            modifier = Modifier
+                .size(6.dp)
+                .offset(x = 92.dp, y = 39.dp)
+                .clip(CircleShape)
+                .background(IPayPalette.Ink90),
+        )
+    }
+}
+
+@Composable
+private fun FinanceChartBars() {
+    // Stack: vertical black line (2px, height 104) at x=200 + Chi bar (200×) + Thu bar (full)
+    Box(modifier = Modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(HomeIPay.Sp.S12)) {
+            // Chi bar — gradient red, 200dp wide
+            Box(
+                modifier = Modifier
+                    .width(200.dp)
+                    .height(36.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(
+                        brush = Brush.horizontalGradient(
+                            colors = listOf(IPayPalette.VietinRed40, IPayPalette.VietinRed60),
+                        ),
+                    )
+                    .padding(horizontal = HomeIPay.Sp.S12, vertical = HomeIPay.Sp.S8),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                Text(
+                    text = "Chi",
+                    style = IPayTheme.typography.titleSmall,
+                    color = Color.White,
+                )
+            }
+            // Thu bar — gradient blue, full width
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(180.dp)
-                    .clip(RoundedCornerShape(HomeIPay.Sp.S12))
+                    .height(36.dp)
+                    .clip(RoundedCornerShape(8.dp))
                     .background(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                IPayPalette.VietinDarkBlue10,
-                                IPayPalette.BrandBgLight,
-                            ),
+                        brush = Brush.horizontalGradient(
+                            colors = listOf(IPayPalette.VietinDarkBlue30, IPayPalette.VietinDarkBlue70),
                         ),
-                    ),
+                    )
+                    .padding(horizontal = HomeIPay.Sp.S12, vertical = HomeIPay.Sp.S8),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                Text(
+                    text = "Thu",
+                    style = IPayTheme.typography.titleSmall,
+                    color = Color.White,
+                )
+            }
+        }
+        // Black vertical divider 2dp wide at x=200, spanning ~104dp from top
+        Box(
+            modifier = Modifier
+                .offset(x = 200.dp)
+                .width(2.dp)
+                .height(104.dp)
+                .background(IPayPalette.Ink90),
+        )
+    }
+}
+
+@Composable
+private fun FinanceChartScale() {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        listOf("0", "10 tr", "20 tr", "30 tr").forEach { label ->
+            Text(
+                text = label,
+                style = IPayTheme.typography.labelXS,
+                color = IPayTheme.colors.textNeutralTertiary,
             )
         }
+    }
+}
+
+@Composable
+private fun FinanceAmountsRow() {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_finance_chi),
+                contentDescription = null,
+                tint = Color.Unspecified,
+                modifier = Modifier.size(18.dp),
+            )
+            Text(
+                text = "17,390,000 VND",
+                style = IPayTheme.typography.bodyMedium,
+                color = IPayPalette.Ink95,
+            )
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_finance_thu),
+                contentDescription = null,
+                tint = Color.Unspecified,
+                modifier = Modifier.size(18.dp),
+            )
+            Text(
+                text = "30,290,000 VND",
+                style = IPayTheme.typography.bodyMedium,
+                color = IPayPalette.Ink95,
+            )
+        }
+    }
+}
+
+@Composable
+private fun FinanceCardDivider() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(IPayTheme.stroke.xs)
+            .background(IPayTheme.colors.dividerPrimary),
+    )
+}
+
+@Composable
+private fun FinanceCardFooter() {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(HomeIPay.Sp.S4),
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_reload),
+                contentDescription = null,
+                tint = Color.Unspecified,
+                modifier = Modifier.size(20.dp),
+            )
+            Text(
+                text = "11:23 - 09/07/2025",
+                style = IPayTheme.typography.bodySmall,
+                color = IPayTheme.colors.textNeutralSecondary,
+            )
+        }
+        Text(
+            text = "Lên kế hoạch",
+            style = IPayTheme.typography.titleSmall,
+            color = IPayTheme.colors.buttonGhostLabel,
+            modifier = Modifier.safeClickable(
+                onSafeClick = { /* POC no-op */ },
+                role = Role.Button,
+            ),
+        )
     }
 }
 
@@ -1263,6 +1513,9 @@ private fun HomeBannerRow() {
 
 @Composable
 private fun HomeBannerCard(data: HomeBanner) {
+    // Banner shape: 343×120 rounded card with gradient bg + decorative overlapping
+    // circles that match Figma's "image 351/352" composition layout (raster image
+    // PNGs not exported — abstract circles approximate the visual feel).
     Box(
         modifier = Modifier
             .width(343.dp)
@@ -1272,10 +1525,31 @@ private fun HomeBannerCard(data: HomeBanner) {
                 brush = Brush.horizontalGradient(
                     colors = listOf(data.bgStart, data.bgEnd),
                 ),
-            )
-            .padding(HomeIPay.Sp.S16),
+            ),
     ) {
-        Column {
+        // Decorative circle 1 — large, top-right offscreen (mimics "image 352" pos)
+        Box(
+            modifier = Modifier
+                .size(258.dp)
+                .offset(x = 152.dp, y = (-88).dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.12f)),
+        )
+        // Decorative circle 2 — medium, mid-right offscreen (mimics "image 351" pos)
+        Box(
+            modifier = Modifier
+                .size(181.dp)
+                .offset(x = 162.dp, y = (-15).dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.08f)),
+        )
+
+        // Foreground text content
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(HomeIPay.Sp.S16),
+        ) {
             Text(
                 text = data.headline,
                 style = IPayTheme.typography.titleLarge,
@@ -1460,6 +1734,7 @@ private object HomeIPay {
         val IconXS: Dp = 14.dp
         val IconS: Dp = 16.dp
         val IconM: Dp = 20.dp
+        val IconL: Dp = 24.dp
 
         // Action grid
         val BalanceCardWidth: Dp = 276.dp
