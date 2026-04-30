@@ -72,6 +72,7 @@ fun RecipientScreen(
     onContinue: (accountNumber: String, bank: MockBank) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    collector: com.poc.behavioralfraud.data.collector.BehavioralCollector? = null,
 ) {
     var accountNumber by remember { mutableStateOf("") }
     var selectedBank by remember { mutableStateOf<MockBank?>(null) }
@@ -119,10 +120,15 @@ fun RecipientScreen(
                 .padding(horizontal = RecipientLayout.HORIZ_PADDING),
             verticalArrangement = Arrangement.spacedBy(IPayTheme.spacing.s16),
         ) {
-            // Active text field
+            // Active text field — record field focus + text changes for behavioral analysis
             ActiveAccountField(
                 value = accountNumber,
-                onValueChange = { accountNumber = it.filter(Char::isDigit) },
+                onValueChange = { newValue ->
+                    val previousLength = accountNumber.length
+                    accountNumber = newValue.filter(Char::isDigit)
+                    collector?.onTextChanged("account_number", previousLength, accountNumber.length)
+                },
+                onFocused = { collector?.onFieldFocus("account_number") },
             )
 
             // Bank selector
@@ -172,9 +178,13 @@ fun RecipientScreen(
 private fun ActiveAccountField(
     value: String,
     onValueChange: (String) -> Unit,
+    onFocused: () -> Unit = {},
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
+    androidx.compose.runtime.LaunchedEffect(isFocused) {
+        if (isFocused) onFocused()
+    }
     // Active state default per Figma (auto-focus at screen open)
     val borderColor = if (isFocused || value.isEmpty()) {
         IPayTheme.colors.inputBorderActive

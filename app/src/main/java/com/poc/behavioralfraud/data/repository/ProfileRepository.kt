@@ -20,6 +20,43 @@ class ProfileRepository(context: Context) {
     companion object {
         private const val KEY_PROFILE = "user_profile"
         private const val KEY_ENROLLMENT_FEATURES = "enrollment_features"
+        private const val KEY_VERIFICATION_HISTORY = "verification_history"
+        private const val MAX_HISTORY_ENTRIES = 100
+    }
+
+    /**
+     * Verification history entry — one per transfer with backend risk result.
+     *
+     * Stored locally for Dev Menu inspection (TASK-024). NOT shown to user on
+     * Success screen — production-feel rule.
+     */
+    data class VerificationRecord(
+        val timestampMs: Long,
+        val riskScore: Int,
+        val reasoning: String,
+        val txSummary: String,  // brief: amount + recipient
+        val source: String,     // "backend" | "local-fallback"
+    )
+
+    fun addVerificationRecord(record: VerificationRecord) {
+        val existing = getVerificationHistory().toMutableList()
+        existing.add(0, record) // newest first
+        if (existing.size > MAX_HISTORY_ENTRIES) {
+            existing.subList(MAX_HISTORY_ENTRIES, existing.size).clear()
+        }
+        prefs.edit()
+            .putString(KEY_VERIFICATION_HISTORY, gson.toJson(existing))
+            .apply()
+    }
+
+    fun getVerificationHistory(): List<VerificationRecord> {
+        val json = prefs.getString(KEY_VERIFICATION_HISTORY, null) ?: return emptyList()
+        return try {
+            val type = object : TypeToken<List<VerificationRecord>>() {}.type
+            gson.fromJson(json, type) ?: emptyList()
+        } catch (e: Exception) {
+            emptyList()
+        }
     }
 
     /**

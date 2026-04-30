@@ -4,6 +4,7 @@ package com.poc.behavioralfraud.ui.screens.transfer
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -138,9 +139,27 @@ fun TransferFormScreen(
 
                 TransferInfoSection(
                     rawDigits = state.amountRaw,
-                    onAmountChange = viewModel::setAmount,
+                    onAmountChange = { newValue ->
+                        val previousLength = state.amountRaw.length
+                        viewModel.setAmount(newValue)
+                        viewModel.collector.onTextChanged(
+                            "amount",
+                            previousLength,
+                            newValue.filter(Char::isDigit).length,
+                        )
+                    },
+                    onAmountFocused = { viewModel.collector.onFieldFocus("amount") },
                     note = state.note,
-                    onNoteChange = viewModel::setNote,
+                    onNoteChange = { newValue ->
+                        val previousLength = state.note.length
+                        viewModel.setNote(newValue)
+                        viewModel.collector.onTextChanged(
+                            "note",
+                            previousLength,
+                            newValue.length,
+                        )
+                    },
+                    onNoteFocused = { viewModel.collector.onFieldFocus("note") },
                     selectedCategoryIndex = selectedCategoryIndex,
                     onCategorySelected = { selectedCategoryIndex = it },
                 )
@@ -420,8 +439,10 @@ private fun RecipientSection(
 private fun TransferInfoSection(
     rawDigits: String,
     onAmountChange: (String) -> Unit,
+    onAmountFocused: () -> Unit = {},
     note: String,
     onNoteChange: (String) -> Unit,
+    onNoteFocused: () -> Unit = {},
     selectedCategoryIndex: Int,
     onCategorySelected: (Int) -> Unit,
 ) {
@@ -449,10 +470,18 @@ private fun TransferInfoSection(
         }
 
         // Amount field (taller, with VND chip + supporting text)
-        AmountFieldWithChip(rawDigits = rawDigits, onValueChange = onAmountChange)
+        AmountFieldWithChip(
+            rawDigits = rawDigits,
+            onValueChange = onAmountChange,
+            onFocused = onAmountFocused,
+        )
 
         // Note field
-        SimpleNoteField(value = note, onValueChange = onNoteChange)
+        SimpleNoteField(
+            value = note,
+            onValueChange = onNoteChange,
+            onFocused = onNoteFocused,
+        )
 
         // Categorization chips
         CategoryChipsSection(
@@ -463,7 +492,14 @@ private fun TransferInfoSection(
 }
 
 @Composable
-private fun AmountFieldWithChip(rawDigits: String, onValueChange: (String) -> Unit) {
+private fun AmountFieldWithChip(
+    rawDigits: String,
+    onValueChange: (String) -> Unit,
+    onFocused: () -> Unit = {},
+) {
+    val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+    LaunchedEffect(isFocused) { if (isFocused) onFocused() }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -498,6 +534,7 @@ private fun AmountFieldWithChip(rawDigits: String, onValueChange: (String) -> Un
                     ),
                     cursorBrush = SolidColor(IPayTheme.colors.inputCaret),
                     visualTransformation = remember { ThousandSeparatorVisualTransformation() },
+                    interactionSource = interactionSource,
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
@@ -532,7 +569,14 @@ private fun AmountFieldWithChip(rawDigits: String, onValueChange: (String) -> Un
 }
 
 @Composable
-private fun SimpleNoteField(value: String, onValueChange: (String) -> Unit) {
+private fun SimpleNoteField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    onFocused: () -> Unit = {},
+) {
+    val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+    LaunchedEffect(isFocused) { if (isFocused) onFocused() }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -558,6 +602,7 @@ private fun SimpleNoteField(value: String, onValueChange: (String) -> Unit) {
                 color = IPayTheme.colors.inputTextDefault,
             ),
             cursorBrush = SolidColor(IPayTheme.colors.inputCaret),
+            interactionSource = interactionSource,
             modifier = Modifier.fillMaxWidth(),
         )
     }

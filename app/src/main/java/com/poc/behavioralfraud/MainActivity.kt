@@ -100,6 +100,7 @@ fun AppNavigation() {
                     navController.navigate(AppRoutes.TRANSFER_FORM)
                 },
                 onBack = { navController.popBackStack() },
+                collector = orchestratorVm.collector,
             )
         }
         composable(AppRoutes.TRANSFER_FORM) {

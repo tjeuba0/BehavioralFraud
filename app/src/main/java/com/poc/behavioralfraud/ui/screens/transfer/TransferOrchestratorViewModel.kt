@@ -1,32 +1,54 @@
 package com.poc.behavioralfraud.ui.screens.transfer
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import android.util.Log
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.poc.behavioralfraud.data.collector.BehavioralCollector
 import com.poc.behavioralfraud.data.mock.MockBank
 import com.poc.behavioralfraud.data.mock.MockTransferLimits
+import com.poc.behavioralfraud.data.model.BehavioralFeatures
+import com.poc.behavioralfraud.data.model.BehavioralProfile
+import com.poc.behavioralfraud.data.model.FraudAnalysisResult
+import com.poc.behavioralfraud.data.repository.ProfileRepository
+import com.poc.behavioralfraud.data.scorer.LocalScorer
+import com.poc.behavioralfraud.network.BackendClient
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
- * Single VM that owns the state of a transfer flow — FR-CL-10 REQ-08.
+ * Single VM owning the transfer flow state — FR-CL-10 REQ-08, REQ-10..15.
  *
- * Lives across TransferType → Recipient → Form → Otp → Success. State holds
- * everything needed to render any of those screens; events are one-shot
- * navigation/decision triggers via [Channel] (CLAUDE.md mandatory pattern for
- * banking — prevents duplicate triggers on configuration change).
+ * Lifecycle (FR-CL-10 REQ-10): behavioral session bound to transfer flow only.
+ *  - [reset] called from Home tap "Chuyển tiền trong nước" — starts a new
+ *    [BehavioralCollector] session.
+ *  - [onOtpComplete] runs the silent verification pipeline (REQ-15) then
+ *    stops the session.
+ *  - [onCleared] stops any leftover session if MainActivity destroyed mid-flow.
  *
- * Lifecycle: instantiated when transfer flow starts (Home tap "Chuyển tiền
- * trong nước"). Reset via [reset] before re-entering flow. Behavioral session
- * lifecycle (start/stop) is wired in TASK-023.
+ * The collector is owned by this VM (not the legacy [TransferViewModel]) so
+ * each transfer flow has its own session id. Production-feel rule: verification
+ * result lives silently in [ProfileRepository.VerificationRecord] history; UI
+ * never binds to it. Dev Menu (TASK-024) surfaces it.
  *
- * `riskResult` is intentionally part of state but UI in production-feel
- * screens MUST NOT bind to it — Dev Menu (TASK-024) will surface it. Keeping
- * it here so the field's existence is documented at the orchestrator level.
+ * Login + Home browsing intentionally outside the session — only transfer
+ * inputs/decisions are captured.
  */
-class TransferOrchestratorViewModel : ViewModel() {
+class TransferOrchestratorViewModel(application: Application) : AndroidViewModel(application) {
+
+    val collector: BehavioralCollector = BehavioralCollector(application)
+    private val profileRepo = ProfileRepository(application)
+    private val backendClient = BackendClient()
+    private val localScorer = LocalScorer()
+
+    private var sessionActive: Boolean = false
 
     private val _state = MutableStateFlow(TransferState())
     val state: StateFlow<TransferState> = _state.asStateFlow()
@@ -70,19 +92,25 @@ class TransferOrchestratorViewModel : ViewModel() {
         _state.update { it.copy(otp = otp.take(OTP_LENGTH)) }
     }
 
-    /** Reset state for a new flow — call from Home tap before navigating. */
+    /**
+     * Reset state for a new flow — called from Home tap before navigating to
+     * RecipientScreen. Starts a fresh [BehavioralCollector] session so each
+     * transfer has its own session id (FR-CL-10 REQ-10).
+     */
     fun reset() {
+        if (sessionActive) {
+            // Edge case: user re-enters flow without completing previous one.
+            // Stop the orphan session before starting a new one.
+            collector.stopSession()
+        }
         _state.value = TransferState()
+        collector.startSession()
+        sessionActive = true
+        Log.d(TAG, "Transfer flow started — session active")
     }
 
     // ─── Actions emitting one-shot events ──────────────────────────────
 
-    /**
-     * Called from Form screen when user taps "Tiếp tục".
-     *
-     * Emits [TransferEvent.ShowOverLimitSheet] if `state.overLimit` is true
-     * (TASK-020 will react). Otherwise emits [TransferEvent.NavigateToOtp].
-     */
     suspend fun onFormContinue() {
         if (_state.value.overLimit) {
             _events.send(TransferEvent.ShowOverLimitSheet)
@@ -91,64 +119,184 @@ class TransferOrchestratorViewModel : ViewModel() {
         }
     }
 
-    /**
-     * Called from OverNapasLimit sheet primary tap — switch channel + go OTP.
-     * Decision time is recorded via collector at TASK-020.
-     */
     suspend fun onOverLimitProceed() {
         setTransferChannel(TransferChannel.Regular)
         _events.send(TransferEvent.NavigateToOtp)
     }
 
-    /** Called from OTP screen when 6 digits entered. */
+    /**
+     * Called from OTP screen when user taps "Xác nhận & Hoàn tất".
+     *
+     * Pipeline (FR-CL-10 REQ-15):
+     *  1. Stop collector session and extract behavioral features.
+     *  2. Silent baseline accumulation if no profile yet, else silent verify.
+     *  3. Persist verification record to history (Dev Menu inspection).
+     *  4. Emit NavigateToSuccess regardless of pipeline outcome — pipeline
+     *     never blocks UI navigation.
+     *
+     * All I/O on [Dispatchers.IO]. Backend errors fall through to LocalScorer.
+     */
     suspend fun onOtpComplete() {
+        // Navigate first (don't block UX on network)
         _events.send(TransferEvent.NavigateToSuccess)
+
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                runCatching { runVerificationPipeline() }
+                    .onFailure { Log.w(TAG, "Verification pipeline error", it) }
+            }
+        }
+    }
+
+    /**
+     * Pipeline — extract features → silent enroll/verify → persist history.
+     * Caller wraps in withContext(Dispatchers.IO).
+     */
+    private fun runVerificationPipeline() {
+        // 1. Snapshot features then end session
+        val profile = profileRepo.getProfile()
+        val enrollmentFeatures = profileRepo.getEnrollmentFeaturesList()
+        val features = collector.extractFeatures(profile, enrollmentFeatures)
+        if (sessionActive) {
+            collector.stopSession()
+            sessionActive = false
+        }
+
+        // 2. Silent enrollment OR verification
+        val txSummary = txSummary()
+        val record = if (profile == null) {
+            silentEnroll(features, txSummary)
+        } else {
+            silentVerify(features, profile, enrollmentFeatures, txSummary)
+        }
+
+        // 3. Persist record
+        profileRepo.addVerificationRecord(record)
+        Log.d(TAG, "Verification recorded: score=${record.riskScore} src=${record.source}")
+    }
+
+    private fun silentEnroll(
+        features: BehavioralFeatures,
+        txSummary: String,
+    ): ProfileRepository.VerificationRecord {
+        // Send to backend; if it builds profile, save it. Otherwise just log baseline.
+        val (reasoning, score) = try {
+            val response = runBlockingIO {
+                backendClient.enrollSession(USER_ID, features)
+            }
+            profileRepo.addEnrollmentFeatures(features)
+            if (response.status == "completed" && response.profile != null) {
+                profileRepo.saveProfile(response.profile)
+                "Profile built (${response.enrollmentCount}/${MIN_BASELINE})" to 0
+            } else {
+                "Enrollment ${response.enrollmentCount}/${MIN_BASELINE} — profile pending" to 0
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Enroll failed; storing baseline locally", e)
+            profileRepo.addEnrollmentFeatures(features)
+            "Local baseline added (backend unavailable)" to 0
+        }
+
+        return ProfileRepository.VerificationRecord(
+            timestampMs = System.currentTimeMillis(),
+            riskScore = score,
+            reasoning = reasoning,
+            txSummary = txSummary,
+            source = "enrollment",
+        )
+    }
+
+    private fun silentVerify(
+        features: BehavioralFeatures,
+        profile: BehavioralProfile,
+        enrollmentFeatures: List<BehavioralFeatures>,
+        txSummary: String,
+    ): ProfileRepository.VerificationRecord {
+        val (result, source) = try {
+            val backendResult = runBlockingIO {
+                backendClient.verifyTransaction(USER_ID, features, profile)
+            }
+            backendResult to "backend"
+        } catch (e: Exception) {
+            Log.w(TAG, "Backend verify failed; using LocalScorer fallback", e)
+            localScorer.score(features, profile, enrollmentFeatures) to "local-fallback"
+        }
+
+        // Update internal riskResult (still NOT bound to UI)
+        _state.update {
+            it.copy(
+                riskResult = TransferRiskResult(
+                    riskScore = result.riskScore,
+                    reasoning = result.explanation,
+                    timestampMs = System.currentTimeMillis(),
+                ),
+            )
+        }
+
+        return ProfileRepository.VerificationRecord(
+            timestampMs = System.currentTimeMillis(),
+            riskScore = result.riskScore,
+            reasoning = "${result.riskLevel} — ${result.explanation}",
+            txSummary = txSummary,
+            source = source,
+        )
+    }
+
+    private fun txSummary(): String {
+        val s = _state.value
+        val recipient = s.recipientBank?.shortName?.let { "to $it" } ?: ""
+        return "${"%,d".format(s.amountVnd)} VND $recipient".trim()
+    }
+
+    private fun <T> runBlockingIO(block: suspend () -> T): T {
+        // Pipeline already runs in Dispatchers.IO context (from onOtpComplete).
+        // We need to call suspending backend methods from this synchronous helper.
+        return kotlinx.coroutines.runBlocking { block() }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        if (sessionActive) {
+            collector.stopSession()
+            sessionActive = false
+        }
     }
 
     // ─── Helpers ───────────────────────────────────────────────────────
 
     private fun isOverNapasLimit(amountVnd: Long, type: TransferType?): Boolean {
-        // Internal transfers do not hit the Napas threshold. Only Napas channel.
         return type == TransferType.Napas && amountVnd > MockTransferLimits.NAPAS_DAILY_LIMIT_VND
     }
 
     companion object {
-        const val MAX_AMOUNT_DIGITS = 12  // up to 999,999,999,999 VND
+        private const val TAG = "TransferOrchestratorVM"
+        private const val USER_ID = "default_user"
+        private const val MIN_BASELINE = 3
+        const val MAX_AMOUNT_DIGITS = 12
         const val MAX_NOTE_LENGTH = 100
         const val OTP_LENGTH = 6
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// State + supporting types
+// State + supporting types (unchanged from previous version)
 // ─────────────────────────────────────────────────────────────────────────────
 
 data class TransferState(
     val transferType: TransferType? = null,
     val recipientAccount: String = "",
     val recipientBank: MockBank? = null,
-    val amountRaw: String = "",        // digits only, vd "1234567"
+    val amountRaw: String = "",
     val amountVnd: Long = 0L,
     val note: String = "",
     val source: TransferSource = TransferSource.PaymentAccount,
     val transferChannel: TransferChannel = TransferChannel.Default,
-    val overLimit: Boolean = false,    // amount > Napas limit (Napas only)
+    val overLimit: Boolean = false,
     val otp: String = "",
     val txStatus: TransferTxStatus = TransferTxStatus.Idle,
-    /**
-     * Risk score from backend verification (silent — surfaced only via Dev Menu
-     * at TASK-024). KHÔNG bind vào UI ở Form/OTP/Success screens.
-     */
     val riskResult: TransferRiskResult? = null,
 )
 
-/**
- * Transfer channel determined by recipient bank: VietinBank → Internal,
- * other Napas members → Napas. Set via [TransferOrchestratorViewModel.setTransferType]
- * once user picks bank in RecipientScreen.
- *
- * No "TransferType selection screen" exists in Figma — this is a derived value.
- */
 enum class TransferType { Internal, Napas }
 
 enum class TransferSource(val label: String, val maskedAccount: String) {
@@ -166,10 +314,6 @@ data class TransferRiskResult(
     val reasoning: String,
     val timestampMs: Long,
 )
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Events — one-shot navigation triggers consumed by NavHost layer.
-// ─────────────────────────────────────────────────────────────────────────────
 
 sealed class TransferEvent {
     data object NavigateToOtp : TransferEvent()
