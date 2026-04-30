@@ -13,7 +13,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.poc.behavioralfraud.ui.navigation.AppRoutes
 import com.poc.behavioralfraud.ui.screens.DesignSystemPreviewScreen
-import com.poc.behavioralfraud.ui.screens.HomeScreen
+import com.poc.behavioralfraud.ui.screens.HomeIPayScreen
 import com.poc.behavioralfraud.ui.screens.ProfileScreen
 import com.poc.behavioralfraud.ui.screens.TransferScreen
 import com.poc.behavioralfraud.ui.screens.TransferViewModel
@@ -78,17 +78,14 @@ fun AppNavigation() {
 @Composable
 private fun HomeRoute(
     navController: NavHostController,
-    viewModel: TransferViewModel,
+    @Suppress("UNUSED_PARAMETER") viewModel: TransferViewModel,
 ) {
-    val enrollmentCount by viewModel.enrollmentCount.collectAsState()
-    val profile by viewModel.profile.collectAsState()
-
-    HomeScreen(
-        enrollmentCount = enrollmentCount,
-        profile = profile,
+    // HomeIPayScreen is intentionally stateless w.r.t. enrollment/verification —
+    // those signals stay silent until TASK-024 surfaces them in Dev Menu.
+    // viewModel is kept on the route signature so TASK-023 can wire
+    // `collector.startSession()` here when the user taps "Chuyển tiền trong nước".
+    HomeIPayScreen(
         onNavigateToTransfer = { navController.navigate(AppRoutes.TRANSFER_LEGACY) },
-        onNavigateToProfile = { navController.navigate(AppRoutes.PROFILE_LEGACY) },
-        onNavigateToThemePreview = { navController.navigate(AppRoutes.DESIGN_SYSTEM_LEGACY) },
-        onClearData = { viewModel.clearAllData() },
+        onNavigateToDevPreview = { navController.navigate(AppRoutes.DESIGN_SYSTEM_LEGACY) },
     )
 }
