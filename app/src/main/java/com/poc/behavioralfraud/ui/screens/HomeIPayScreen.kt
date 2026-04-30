@@ -139,20 +139,68 @@ fun HomeIPayScreen(
 
 @Composable
 private fun HomeBackground() {
+    // Figma BG/premium/new (1:15541) — composition of:
+    //  1. Ink5 base
+    //  2. Radial gradient sweep (dark blue → fading to transparent)
+    //  3. bg_premium_main decorative SVG composition floating top
+    //  4. Bottom fade to Ink5
+    //
+    // Original Figma also has decorative star + bird icons, frosted blur
+    // strips, mix-blend-mode overlays — too complex for direct Compose
+    // replication. POC: approximate the "premium" feel via radial gradient
+    // + the central decorative SVG.
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    // Recreate "premium/new" — light blue top, neutral grey bottom
-                    colorStops = arrayOf(
-                        0f to IPayPalette.VietinDarkBlue10,      // #DEF1FF top
-                        0.30f to IPayPalette.VietinDarkBlue30,    // #76CFFF mid-light
-                        1f to IPayPalette.Ink5,                   // #F8FAFC bottom
+            .background(IPayPalette.Ink5),
+    ) {
+        // Radial gradient — dark blue from upper-left, fading to transparent.
+        // Approximates the multi-stop radialGradient in Figma's BG/mass/new.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    brush = Brush.radialGradient(
+                        colorStops = arrayOf(
+                            0f to IPayPalette.VietinDarkBlue90.copy(alpha = 0.85f),
+                            0.30f to IPayPalette.VietinDarkBlue80.copy(alpha = 0.55f),
+                            0.55f to IPayPalette.VietinDarkBlue30.copy(alpha = 0.30f),
+                            0.80f to IPayPalette.VietinDarkBlue10.copy(alpha = 0.10f),
+                            1f to IPayPalette.Ink5.copy(alpha = 0f),
+                        ),
+                        radius = 1500f,
+                        center = androidx.compose.ui.geometry.Offset(150f, 200f),
                     ),
                 ),
-            ),
-    )
+        )
+        // Central decorative composition SVG (top-left area)
+        Image(
+            painter = painterResource(R.drawable.bg_premium_main),
+            contentDescription = null,
+            contentScale = ContentScale.Fit,
+            alpha = 0.65f,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .offset(x = (-30).dp, y = 60.dp)
+                .width(280.dp)
+                .height(150.dp),
+        )
+        // Bottom fade to Ink5
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(400.dp)
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            IPayPalette.Ink5.copy(alpha = 0f),
+                            IPayPalette.Ink5,
+                        ),
+                    ),
+                ),
+        )
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -171,7 +219,10 @@ private fun HomeTopBar(onLongPressLogo: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        // Logo — VietinBank | iPay Mobile (long-press → Dev Menu)
+        // Logo composite — Figma 1:15546 "LogoApplication" Standard Dynamic on-color-bg
+        // Layout (96×40): top 60% Vietin full logo (red bird + wordmark),
+        // bottom 40% split: left iPay logo + right Mobile Banking text.
+        // Long-press → Dev Menu.
         Box(
             modifier = Modifier
                 .height(HomeIPay.Size.LogoHeight)
@@ -182,12 +233,43 @@ private fun HomeTopBar(onLongPressLogo: () -> Unit) {
                     role = Role.Button,
                 ),
         ) {
+            // Top zone: Vietin full logo (60% height)
             Image(
                 painter = painterResource(R.drawable.logo_vietin_full),
-                contentDescription = "VietinBank iPay Mobile",
-                modifier = Modifier.fillMaxSize(),
+                contentDescription = "VietinBank",
                 contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(HomeIPay.Size.LogoHeight * 0.60f)
+                    .align(Alignment.TopStart),
             )
+            // Bottom zone: iPay text + Mobile Banking text side by side
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(HomeIPay.Size.LogoHeight * 0.40f)
+                    .align(Alignment.BottomStart)
+                    .padding(start = HomeIPay.Size.LogoWidth * 0.07f),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Image(
+                    painter = painterResource(R.drawable.logo_ipay_text),
+                    contentDescription = "iPay",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .height(HomeIPay.Size.LogoHeight * 0.32f)
+                        .width(HomeIPay.Size.LogoWidth * 0.18f),
+                )
+                Spacer(Modifier.width(HomeIPay.Sp.S4))
+                Image(
+                    painter = painterResource(R.drawable.logo_mobile_banking),
+                    contentDescription = "Mobile Banking",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .height(HomeIPay.Size.LogoHeight * 0.30f)
+                        .width(HomeIPay.Size.LogoWidth * 0.45f),
+                )
+            }
         }
 
         Row(
