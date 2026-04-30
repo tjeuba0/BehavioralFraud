@@ -14,6 +14,11 @@ import androidx.navigation.compose.rememberNavController
 import com.poc.behavioralfraud.ui.navigation.AppRoutes
 import com.poc.behavioralfraud.ui.screens.DesignSystemPreviewScreen
 import com.poc.behavioralfraud.ui.screens.HomeIPayScreen
+import com.poc.behavioralfraud.ui.screens.dev.DevMenuScreen
+import com.poc.behavioralfraud.ui.screens.dev.ManualOverrideScreen
+import com.poc.behavioralfraud.ui.screens.dev.ProfileInspectorScreen
+import com.poc.behavioralfraud.ui.screens.dev.RiskHistoryScreen
+import com.poc.behavioralfraud.ui.screens.dev.SessionInspectorScreen
 import com.poc.behavioralfraud.ui.screens.ProfileScreen
 import com.poc.behavioralfraud.ui.screens.TransferScreen
 import com.poc.behavioralfraud.ui.screens.TransferViewModel
@@ -158,6 +163,36 @@ fun AppNavigation() {
         composable(AppRoutes.DESIGN_SYSTEM_LEGACY) {
             DesignSystemPreviewScreen(onBack = { navController.popBackStack() })
         }
+
+        // ─── Dev Menu (TASK-024) — accessed via long-press logo on Home ───
+        composable(AppRoutes.DEV) {
+            DevMenuScreen(
+                onBack = { navController.popBackStack() },
+                onProfileInspector = { navController.navigate(AppRoutes.DEV_PROFILE) },
+                onRiskHistory = { navController.navigate(AppRoutes.DEV_RISK_HISTORY) },
+                onSessionInspector = { navController.navigate(AppRoutes.DEV_SESSION) },
+                onManualOverride = { navController.navigate(AppRoutes.DEV_MANUAL_OVERRIDE) },
+                onDesignSystem = { navController.navigate(AppRoutes.DEV_DESIGN_SYSTEM) },
+            )
+        }
+        composable(AppRoutes.DEV_PROFILE) {
+            ProfileInspectorScreen(onBack = { navController.popBackStack() })
+        }
+        composable(AppRoutes.DEV_RISK_HISTORY) {
+            RiskHistoryScreen(onBack = { navController.popBackStack() })
+        }
+        composable(AppRoutes.DEV_SESSION) {
+            SessionInspectorScreen(
+                collector = orchestratorVm.collector,
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(AppRoutes.DEV_MANUAL_OVERRIDE) {
+            ManualOverrideScreen(onBack = { navController.popBackStack() })
+        }
+        composable(AppRoutes.DEV_DESIGN_SYSTEM) {
+            DesignSystemPreviewScreen(onBack = { navController.popBackStack() })
+        }
     }
 }
 
@@ -178,6 +213,7 @@ private fun HomeRoute(
             orchestratorVm.reset()
             navController.navigate(AppRoutes.TRANSFER_RECIPIENT)
         },
-        onNavigateToDevPreview = { navController.navigate(AppRoutes.DESIGN_SYSTEM_LEGACY) },
+        // Long-press logo → Dev Menu (REQ-16) — replaces direct Design System link.
+        onNavigateToDevPreview = { navController.navigate(AppRoutes.DEV) },
     )
 }
