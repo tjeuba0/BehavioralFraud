@@ -315,3 +315,331 @@ ProfileMetric("Gyro stability", String.format("%.6f", avgGyro), "Trung bình 3 t
 - [x] Existing features giữ nguyên
 - [x] JSON serialize/deserialize OK
 - [x] App compile + chạy không crash
+
+---
+
+## iPay Visual Clone — TASK-010..025
+
+> Reference SRS: FR-CL-08 (Design System), FR-CL-09 (Login + Touch ID), FR-CL-10 (Transfer Flow E2E + Silent Behavioral Pipeline + Dev Menu).
+> Figma: `5JXePCuiqKQFdrjNHNQVbw` node `1:15393`.
+
+### Task Index — TASK-010..025
+
+| ID | Feature | SRS | Priority | Status | Dependencies |
+|----|---------|-----|----------|--------|--------------|
+| TASK-010 | Design tokens (color/typography/spacing/shape/stroke/elevation) | FR-CL-08 (REQ-01..08) | P0 | planned | none |
+| TASK-011 | Foundation components (Button/TextField/TopBar/Card) | FR-CL-08 (REQ-09..13) | P0 | planned | TASK-010 |
+| TASK-012 | Foundation components (Chip/AIChip/Alert/BottomSheet) | FR-CL-08 (REQ-14..17) | P0 | planned | TASK-010 |
+| TASK-013 | Foundation components (Toggle/Selection/Tabs/Badges) | FR-CL-08 (REQ-18..22) | P1 | planned | TASK-010 |
+| TASK-014 | Design System Preview screen | FR-CL-08 (REQ-23) | P1 | planned | TASK-011, 012, 013 |
+| TASK-015 | NavHost migration (replace `when (currentScreen)` switch-case in MainActivity:30) | FR-CL-10 (REQ-09) | P0 | planned | TASK-011 |
+| TASK-016 | Login screen + PinDots + NumericKeypad + biometric | FR-CL-09 (REQ-01..05) | P0 | planned | TASK-011, 015 |
+| TASK-017 | HomeIPayScreen rewrite — strip enrollment UI + dev affordance | FR-CL-10 (REQ-01) | P0 | planned | TASK-013, 015 |
+| TASK-018 | TransferTypeScreen + RecipientScreen | FR-CL-10 (REQ-02, 03) | P0 | planned | TASK-011, 017 |
+| TASK-019 | TransferFormScreen rewrite + TransferOrchestratorViewModel | FR-CL-10 (REQ-04, 08) | P0 | planned | TASK-018 |
+| TASK-020 | OverNapasLimitBottomSheet + decisionTimeOverLimitMs | FR-CL-10 (REQ-05, 13) | P0 | planned | TASK-019, TASK-012 |
+| TASK-021 | OtpScreen + otpPasted detection | FR-CL-10 (REQ-06, 14) | P0 | planned | TASK-020 |
+| TASK-022 | TransferSuccessScreen — production-feel, no risk display | FR-CL-10 (REQ-07) | P0 | planned | TASK-021 |
+| TASK-023 | Silent behavioral pipeline (session lifecycle in VM + silent verification + history persist) | FR-CL-10 (REQ-10..12, 15) | P0 | planned | TASK-016..022 |
+| TASK-024 | Dev Menu (DevMenu/Profile/RiskHistory/Session/ManualOverride) | FR-CL-10 (REQ-16..20) | P0 | planned | TASK-023 |
+| TASK-025 | E2E manual smoke + Figma visual diff + production-feel audit | FR-CL-08, 09, 10 acceptance | P1 | planned | TASK-024 |
+
+---
+
+### TASK-010: Design tokens
+
+- **SRS section:** FR-CL-08 (REQ-01..08)
+- **Branch:** `feat/ipay-tokens`
+- **Dependencies:** none
+- **Status:** planned
+
+**Goal:** Setup toàn bộ design tokens dưới `ui/theme/` (Color, Spacing, Shape, Stroke, Elevation, Typography, Theme) — tiêu thụ qua `IPayTheme.*`.
+
+**Done when:**
+- [ ] 7 file token compile, không hard-code literal trong screen
+- [ ] `IPayTheme` provide 6 CompositionLocal (colors, spacing, typography, shapes, stroke, elevation)
+- [ ] `BehavioralFraudTheme` alias còn tồn tại để MainActivity không vỡ
+- [ ] Material3 colorScheme/typography/shapes mapped từ IPay tokens
+- [ ] Font fallback `FontFamily.SansSerif` + comment chỗ swap khi có SVN-Gilroy ttf
+
+---
+
+### TASK-011: Foundation components — Button / TextField / TopBar / Card
+
+- **SRS section:** FR-CL-08 (REQ-09..13)
+- **Branch:** `feat/ipay-foundation-1`
+- **Dependencies:** TASK-010
+- **Status:** planned
+
+**Goal:** Build 5 base components + `safeClickable` modifier.
+
+**Done when:**
+- [ ] `IPayButton` 4 variant × 3 size hiển thị đúng trong preview
+- [ ] `IPayIconButton` round 40dp
+- [ ] `IPayTextField` default/active/error/disabled + prefix/suffix
+- [ ] `IPayTopBar` standard + transparent
+- [ ] `IPayCard` plain/elevated/outlined
+- [ ] `safeClickable` debounce 350ms
+
+---
+
+### TASK-012: Foundation components — Chip / AIChip / Alert / BottomSheet
+
+- **SRS section:** FR-CL-08 (REQ-14..17)
+- **Branch:** `feat/ipay-foundation-2`
+- **Dependencies:** TASK-010
+- **Status:** planned
+
+**Done when:**
+- [ ] `IPayChip` default + selected
+- [ ] `IPayAIChip` gradient border 5 stops + label gradient 3 stops
+- [ ] `IPayAlertBanner` info/warning/success
+- [ ] `IPayBottomSheet` skin lại Material3 ModalBottomSheet (handle 40×4dp, radius top r24)
+
+---
+
+### TASK-013: Foundation components — Toggle / Selection / Tabs / Badges
+
+- **SRS section:** FR-CL-08 (REQ-18..22)
+- **Branch:** `feat/ipay-foundation-3`
+- **Dependencies:** TASK-010
+- **Status:** planned
+
+**Done when:**
+- [ ] `IPayToggle` animate handle on/off
+- [ ] `IPaySelection` radio-card + checkbox-card, selected state border + bg brand secondary
+- [ ] `IPayHorizontalTabs` underline indicator (Vietin red 60)
+- [ ] `IPayStatusBadge` 5 variant
+- [ ] `IPayNotificationBadge` dot + count với gradient red
+
+---
+
+### TASK-014: Design System Preview screen
+
+- **SRS section:** FR-CL-08 (REQ-23)
+- **Branch:** `feat/ipay-preview-screen`
+- **Dependencies:** TASK-011, 012, 013
+- **Status:** planned
+
+**Goal:** Showcase tokens + 13 components — accessed via Dev Menu (long-press logo Home 1.5s → Dev Menu → Design System Preview).
+
+**Done when:**
+- [ ] Screen showcase đầy đủ 13 components + token sections
+- [ ] Truy cập qua Dev Menu (sau TASK-024) — KHÔNG truy cập trực tiếp từ Home
+
+---
+
+### TASK-015: NavHost migration
+
+- **SRS section:** FR-CL-10 (REQ-09)
+- **Branch:** `feat/ipay-navhost`
+- **Dependencies:** TASK-011
+- **Status:** planned
+
+**Goal:** Replace `when (currentScreen)` switch-case trong `MainActivity.kt` (line 30) bằng `NavHost` với 12+ routes.
+
+**Note:** Verified — code hiện tại dùng switch-case, KHÔNG phải NavHost. CLAUDE.md mô tả sai.
+
+**Routes:** `login`, `home`, `transfer/type`, `transfer/recipient`, `transfer/form`, `transfer/otp`, `transfer/success`, `dev`, `dev/profile`, `dev/risk-history`, `dev/session`, `dev/manual-override`, `dev/design-system`.
+
+**Done when:**
+- [ ] `NavController` quản lý mọi navigation
+- [ ] `androidx.navigation.compose` đã có trong dependencies (verify build.gradle)
+- [ ] Các màn hiện có (Home/Transfer/Profile) chạy được trên NavHost (giai đoạn migration)
+- [ ] Existing TransferViewModelTest còn pass
+
+---
+
+### TASK-016: LoginScreen + Touch ID
+
+- **SRS section:** FR-CL-09 (REQ-01..05)
+- **Branch:** `feat/ipay-login`
+- **Dependencies:** TASK-011, TASK-015
+- **Status:** planned
+
+**Goal:** Màn login PIN 6 số + biometric. Mock pass mọi PIN. Login KHÔNG mở behavioral session (transfer session bắt đầu ở Home).
+
+**Done when:**
+- [ ] App start vào LoginScreen
+- [ ] 6 PIN dots + numeric keypad render đúng
+- [ ] `BiometricManager.canAuthenticate()` decide hide/show button (handle NO_HARDWARE / NONE_ENROLLED / SECURITY_UPDATE_REQUIRED)
+- [ ] Nhập 6 số → vào Home; biometric success → vào Home
+- [ ] BehavioralCollector idle (KHÔNG có session active) sau khi login → Home
+- [ ] biometric library bumped lên 1.2.0-alpha05+ trong build.gradle.kts
+
+---
+
+### TASK-017: HomeIPayScreen rewrite — strip enrollment UI
+
+- **SRS section:** FR-CL-10 (REQ-01)
+- **Branch:** `feat/ipay-home`
+- **Dependencies:** TASK-013, TASK-015
+- **Status:** planned
+
+**Goal:** Skin Home theo iPay + **strip toàn bộ enrollment/verification UI** khỏi production view. Long-press logo affordance vào Dev Menu.
+
+**Note:** HomeScreen.kt hiện tại (verified line 91-105, 122-134, 153, 161-171) hiển thị:
+- "Enrollment: 0/3" counter
+- "Chế độ: ENROLLMENT/VERIFICATION" toggle
+- "Cách hoạt động" guide với "Enrollment", "Verification", "Demo Fraud"
+- Button label "Chuyển khoản (Enrollment 1/3)" / "Chuyển khoản (Verification)"
+- "Xem Profile hành vi" button
+- "Xóa tất cả dữ liệu" button
+
+→ **Tất cả phải bỏ khỏi HomeIPayScreen production**. Logic chuyển vào DevMenuScreen (TASK-024).
+
+**Done when:**
+- [ ] Header gradient + greeting + avatar + notification badge
+- [ ] Quick balance card mock
+- [ ] Action grid 4×N với IPayCard icon + label (action "Chuyển tiền trong nước" trigger startSession + navigate)
+- [ ] Promotions row với card thường (KHÔNG dùng IPayAIChip)
+- [ ] **KHÔNG có chữ** "Enrollment", "Verification", "Profile", "Behavior", "POC" trên Home
+- [ ] Long-press logo 1.5s → DevMenuScreen (placeholder cho đến TASK-024)
+
+---
+
+### TASK-018: TransferTypeScreen + RecipientScreen
+
+- **SRS section:** FR-CL-10 (REQ-02, 03)
+- **Branch:** `feat/ipay-recipient`
+- **Dependencies:** TASK-011, TASK-017
+- **Status:** planned
+
+**Done when:**
+- [ ] TransferType: 2 IPaySelection card (nội bộ / Napas)
+- [ ] Recipient: STK input (focus đầu tiên) + bank list scroll + recent chips
+- [ ] Sticky button "Tiếp tục" disabled cho đến khi đủ data
+- [ ] Mock data trong `data/mock/MockData.kt`
+
+---
+
+### TASK-019: TransferFormScreen + TransferOrchestratorViewModel
+
+- **SRS section:** FR-CL-10 (REQ-04, 08)
+- **Branch:** `feat/ipay-transfer-form`
+- **Dependencies:** TASK-018
+- **Status:** planned
+
+**Done when:**
+- [ ] Form số tiền (thousand-separator) + ghi chú + nguồn tiền
+- [ ] AlertBanner info hạn mức Napas
+- [ ] TransferOrchestratorViewModel quản lý toàn flow
+- [ ] Channel<TransferEvent> cho navigation
+- [ ] Update existing TransferViewModelTest hoặc viết test mới cho TransferOrchestratorViewModel
+- [ ] Refactor TransferViewModel cũ — tách enrollment/verification logic ra khỏi production VM
+
+---
+
+### TASK-020: OverNapasLimitBottomSheet + decisionTimeOverLimitMs
+
+- **SRS section:** FR-CL-10 (REQ-05, 13)
+- **Branch:** `feat/ipay-napas-sheet`
+- **Dependencies:** TASK-019, TASK-012
+- **Status:** planned
+
+**Done when:**
+- [ ] Bottom sheet trigger khi amount > hạn mức mock
+- [ ] 2 button: chuyển kênh thường / huỷ
+- [ ] `decisionTimeOverLimitMs: Long = 0` field thêm vào BehavioralFeatures (default 0 cho backward-compat)
+- [ ] Backend Pydantic model mirror update
+- [ ] Đo được hesitation từ lúc sheet show đến lúc tap
+
+---
+
+### TASK-021: OtpScreen + otpPasted detection
+
+- **SRS section:** FR-CL-10 (REQ-06, 14)
+- **Branch:** `feat/ipay-otp`
+- **Dependencies:** TASK-020
+- **Status:** planned
+
+**Done when:**
+- [ ] 6 ô OTP (reuse IPayPinDots ở mode "show digit") + numeric keypad
+- [ ] Counter "Gửi lại sau 60s"
+- [ ] Auto-submit khi đủ 6 số
+- [ ] `otpPasted: Boolean = false` field thêm vào BehavioralFeatures
+- [ ] Khi `onTextChanged` lengthDelta >= 3 trên field OTP → set otpPasted=true
+
+---
+
+### TASK-022: TransferSuccessScreen — production-feel
+
+- **SRS section:** FR-CL-10 (REQ-07)
+- **Branch:** `feat/ipay-success`
+- **Dependencies:** TASK-021
+- **Status:** planned
+
+**Goal:** Success screen iPay thật — KHÔNG hiển thị risk score / verification result. Result lưu silent vào DataStore (TASK-023).
+
+**Done when:**
+- [ ] Full screen success skin theo Figma
+- [ ] Card chi tiết giao dịch (người nhận, STK, ngân hàng, nội dung, mã GD, thời gian)
+- [ ] Button "Về trang chủ" + "Lưu biên lai"
+- [ ] **KHÔNG hiển thị** "Phân tích rủi ro" / risk score / verification result / "POC" gì cả
+- [ ] Code review: grep "risk", "score", "verification", "phân tích" trong file → 0 match (trừ comment giải thích)
+
+---
+
+### TASK-023: Silent behavioral pipeline
+
+- **SRS section:** FR-CL-10 (REQ-10, 11, 12, 15)
+- **Branch:** `feat/ipay-silent-pipeline`
+- **Dependencies:** TASK-016..022
+- **Status:** planned
+
+**Goal:** Wire collector lifecycle vào TransferOrchestratorViewModel + silent verification + persist verification history.
+
+**Done when:**
+- [ ] `collector.startSession()` gọi trong `TransferOrchestratorViewModel.init` (sau khi user tap "Chuyển tiền" Home)
+- [ ] `collector.stopSession()` gọi ở Success path + `onCleared()` (cover abort)
+- [ ] App backgrounded > 30s → end session với reason "backgrounded"
+- [ ] LoginScreen + HomeScreen browsing KHÔNG có session active
+- [ ] Mọi screen trong transfer flow (TransferType/Recipient/Form/OTP/Success) wrap pointerInteropFilter
+- [ ] Field focus sequence ghi đúng `account_number → bank_select → amount → note → otp` (KHÔNG có pin_pad)
+- [ ] sessionDurationMs chỉ cover transfer flow
+- [ ] OTP submit (trước Success navigate): extract features → silent enroll/verify
+- [ ] Baseline candidates lưu vào DataStore key `baseline_candidates` (list features); đủ N=3 → backend build profile → lưu DataStore
+- [ ] Profile có sẵn → `verifyTransaction()` → kết quả (timestamp, riskScore, reasoning, txSummary) append vào DataStore key `verification_history`
+- [ ] **KHÔNG hiển thị result trên Success screen**
+- [ ] LocalScorer fallback khi backend down
+- [ ] Pipeline chạy `withContext(Dispatchers.IO)` không block UI navigate Success
+- [ ] Test rotation device: không duplicate verify call
+
+---
+
+### TASK-024: Dev Menu
+
+- **SRS section:** FR-CL-10 (REQ-16..20)
+- **Branch:** `feat/ipay-dev-menu`
+- **Dependencies:** TASK-023
+- **Status:** planned
+
+**Goal:** Test harness ẩn — Profile/RiskHistory/Session/ManualOverride/DesignPreview accessible via long-press logo Home.
+
+**Done when:**
+- [ ] DevMenuScreen list 6 entries với navigate đúng route
+- [ ] ProfileInspectorScreen show profile JSON + baseline features list
+- [ ] RiskHistoryScreen timeline verification_history (newest first) + clear button với confirm
+- [ ] SessionInspectorScreen live view session active (refresh 500ms) + empty state
+- [ ] ManualOverrideScreen: Reset profile / Clear baseline / Show next risk score toggle / Force backend down toggle — mỗi action có confirmation dialog
+- [ ] Design System Preview accessible từ menu này
+- [ ] Existing ProfileScreen.kt logic migrate vào ProfileInspectorScreen
+- [ ] Existing "Chế độ ENROLLMENT/VERIFICATION" + "Xóa data" UI từ HomeScreen migrate vào ManualOverrideScreen
+
+---
+
+### TASK-025: E2E smoke + Figma visual diff + production-feel audit
+
+- **SRS section:** FR-CL-08, 09, 10 acceptance
+- **Branch:** `feat/ipay-smoke`
+- **Dependencies:** TASK-024
+- **Status:** planned
+
+**Done when:**
+- [ ] Smoke test Login → Home → Transfer flow → Success không crash
+- [ ] Visual diff manual ≥ 80% match Figma frame `1:15393`: chụp Figma export PNG cho từng screen + screenshot device → side-by-side trong PR description
+- [ ] Lint clean (`./gradlew lint`)
+- [ ] **Production-feel audit**: grep toàn codebase trừ `ui/screens/dev/` cho strings: "enrollment", "verification", "fraud", "risk", "behavior", "POC", "Phân tích rủi ro" → 0 match user-facing
+- [ ] Behavioral payload gửi backend chứa đầy đủ field mới (decisionTimeOverLimitMs, otpPasted)
+- [ ] Test scenario fraud: Tester A enroll 3 lần silent → Tester B chuyển 1 lần → Dev Menu > Risk History thấy score Tester B cao hơn baseline rõ rệt
+- [ ] Backend Pydantic backward-compat: client cũ thiếu field mới không 422

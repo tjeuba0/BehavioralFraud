@@ -331,3 +331,273 @@ Output of on-device feature extraction, sent to backend as JSON. Backend needs c
 9. Phase 3 features: `avgTapAccelSpike` khác 0 khi tap trên thiết bị cầm tay; `idleGyroRMS` gần 0 trên bàn
 10. Tất cả features mới serialize thành JSON và backend Pydantic model parse thành công
 11. Backend `BehavioralFeatures` model backward-compatible — client cũ không có fields mới → default values, không lỗi 422
+
+---
+
+# SRS — Bổ sung: iPay Visual Clone for Internal Behavioral Data Collection
+
+> Append vào `SRS.md` sau Section 10.2.
+> Reference Figma: `https://www.figma.com/design/5JXePCuiqKQFdrjNHNQVbw/Transfer--hieunt9-` — frame chính `1:15393` (375×812 iOS layout).
+> Mục tiêu: clone giao diện iPay (VietinBank) đủ giống thật để team nội bộ tin tưởng dùng → thu thập behavioral data trên môi trường gần production.
+
+> **Design principle (CRITICAL):** Mọi UI người dùng thấy phải giống iPay 100% — KHÔNG được lộ bất kỳ dấu vết test harness nào (enrollment label, verification toggle, risk score display, debug info). Profile build & verification chạy ngầm; team test xem kết quả qua Dev Menu ẩn (long-press logo Home 1.5s).
+
+> **Behavioral session boundary (CRITICAL):** 1 giao dịch = 1 session độc lập. `collector.startSession()` gọi khi user tap "Chuyển tiền trong nước" ở HomeIPayScreen action grid; `collector.stopSession()` gọi khi đến TransferSuccessScreen HOẶC khi user abort (back giữa flow / VM cleared / app backgrounded > X giây). LoginScreen + HomeScreen browsing KHÔNG nằm trong session.
+
+---
+
+### FR-CL-08: Design System Foundation
+
+**Description:** Xây dựng design system iPay đầy đủ — tokens (color/typography/spacing/shape/stroke/elevation) + foundation components — làm nền cho FR-CL-09 và FR-CL-10. Tất cả screens sau này phải tiêu thụ token qua `IPayTheme.*`, KHÔNG hard-code màu, font, dp.
+
+**Scope:** Theme tokens + 13 base Composables + 1 preview screen (truy cập qua Dev Menu).
+
+**New tokens — Theme:**
+
+| REQ-ID | Token | Type | Description |
+|--------|-------|------|-------------|
+| REQ-01 | `IPayPalette` | object (primitives) | Brand `vietinDarkBlue/10..95`, `vietinRed/40..80`, neutral `Ink/5..95`, semantic `green/orange/blue`, AI gradient stops, Purple. Map 1-1 từ Figma vars. |
+| REQ-02 | `IPayColors` | data class (semantic) | text/icon/background/border/button/input/chip/tab/toggle/badge/alert tokens. Tên trùng Figma var (vd `textNeutralPrimary`, `borderBrandPrimary`). |
+| REQ-03 | `IPayTypography` | data class | 16 text styles: heading L/S/XS, title L/M/S, body L/M/S, body emphasized XL/L/M/S, label L/M/S/XS. Font fallback `FontFamily.SansSerif` cho POC; document chỗ swap khi có SVN-Gilroy ttf (chưa có trong res/font/ — confirmed). |
+| REQ-04 | `IPaySpacing` | data class | s0/s1/s2/s4/s6/s8/s10/s12/s16/s20/s24/s32/s40 + s1.5. |
+| REQ-05 | `IPayShapes` | data class | none/xsmall(8)/small(16)/medium(20)/large(24)/full(9999) + r4. |
+| REQ-06 | `IPayStroke` | data class | xs(1)/s(1.5)/md(1.75)/lg(2)/xl(4). |
+| REQ-07 | `IPayElevation` | data class | small (offset 0,-2 / blur 12) + large (offset 0,4 / blur 16) — match Figma `dropShadow/Small` & `Shadow/Large`. |
+| REQ-08 | `IPayTheme` | object + Composable | Public access (`IPayTheme.colors`, `.typography`, …). Wraps `MaterialTheme` để Material widgets vẫn nhận token. POC: chỉ light mode (skip dark). |
+
+**New foundation components — under `ui/components/`:**
+
+| REQ-ID | Component | Variants | Description |
+|--------|-----------|----------|-------------|
+| REQ-09 | `IPayButton` | Primary / Secondary / Ghost / Tertiary × Large / Medium / Small | Primary = horizontal gradient `#005993 → #007DD2`, full radius. Loading state hiển thị `CircularProgressIndicator`. Hỗ trợ leading/trailing icon. Dùng `safeClickable` (debounce 350ms). |
+| REQ-10 | `IPayIconButton` | Primary / Secondary / Ghost | Round (radius full) icon button, default size 40dp. |
+| REQ-11 | `IPayTextField` | Default / Active / Error / Disabled, prefix/suffix slot | Border `inputBorderDefault → inputBorderActive` khi focus. Caret = `inputCaret`. Hỗ trợ helper text + error text. Underlying = `BasicTextField` để toàn quyền control style. |
+| REQ-12 | `IPayTopBar` | Standard / Transparent | Back icon (left), title (center), trailing slot (right). Background `bgNeutralPrimary` hoặc transparent. |
+| REQ-13 | `IPayCard` | Plain / Elevated / Outlined | Container radius `r16`. Elevated dùng `IPayElevation.large`. Outlined dùng `borderNeutralPrimary`. Slot content. |
+| REQ-14 | `IPayChip` | Default / Selected | Pill (radius full). Border `chipBorder`, label `chipLabel`. Click = `safeClickable`. |
+| REQ-15 | `IPayAIChip` | — | Pill với gradient border 5 stops (`#76CFFF → #5F59FB → #F286FF → #FFA0B2 → #FFFFFF80`) + label gradient (`#005BAA → #797DFF → #FD3664`). Indicator AI (sparkle icon). Dành riêng cho AI features (KHÔNG dùng cho promotions). |
+| REQ-16 | `IPayAlertBanner` | Info / Warning / Success | Container radius `r16`, leading icon, body text, optional close. Color theo variant (info=`alertInfoBg/Border/Icon`, warning=`warning*`, success=`green*`). |
+| REQ-17 | `IPayBottomSheet` | Standard | Modal sheet, top handle 40×4dp `Ink30`, radius top `r24`. Header slot + content slot + footer slot (button row). Dùng `ModalBottomSheet` của Material3 nhưng skin lại theo iPay. |
+| REQ-18 | `IPayToggle` | On / Off / Disabled | Track 32×20dp, handle 16×16dp. Off track = `toggleBgDefault`. On track = brand gradient. Animate handle. |
+| REQ-19 | `IPaySelection` | RadioCard / Checkbox-card | Card chứa label + description + radio/checkbox phải. Selected → border `borderBrandPrimary` + bg `bgBrandSecondary`. |
+| REQ-20 | `IPayHorizontalTabs` | Underline indicator | Row of tabs, active tab `tabLabelActive` + indicator `tabIndicatorActive` (Vietin red 60). Default indicator `tabIndicatorDefault`. |
+| REQ-21 | `IPayStatusBadge` | Success / Warning / Error / Info / Neutral | Pill + small dot icon + label. |
+| REQ-22 | `IPayNotificationBadge` | Dot / Count | Gradient red `#D71249 → #FFA0B2`, white outside border, label white. Auto co theo content. |
+
+**New preview screen:**
+
+| REQ-ID | Item | Description |
+|--------|------|-------------|
+| REQ-23 | `DesignSystemPreviewScreen` | Showcase mọi token + component để dev/QA review. Sections: Color palette, Typography scale, Buttons, Inputs, Cards, Chips, Alerts, Bottom sheet trigger, Toggles, Selection cards, Tabs, Badges. **Truy cập qua Dev Menu** (long-press logo Home 1.5s → Dev Menu → Design System Preview). KHÔNG truy cập trực tiếp từ Home. |
+
+**Constraints:**
+
+- KHÔNG hard-code color, font, dp trong code feature — phải đi qua `IPayTheme.*`
+- KHÔNG dùng `clickable` trực tiếp — luôn `safeClickable` (CLAUDE.md mandatory)
+- Material3 vẫn là nền (cho `Scaffold`, `ModalBottomSheet`, `Snackbar`, …) — `IPayTheme` override `colorScheme`/`typography`/`shapes` cho Material widget không bị override
+- Dark mode: SKIP cho POC — wire signature tham số nhưng luôn light
+- Không thêm dependency mới ngoài Compose BOM + Material3 đã có
+- File path: `app/src/main/java/com/poc/behavioralfraud/ui/theme/` (Color/Spacing/Shape/Typography/Stroke/Elevation/Theme) và `ui/components/` (mỗi component 1 file)
+- Mỗi component KHÔNG quá 250 dòng — tách helper nếu cần
+- Tất cả component public phải có `Modifier` parameter mặc định `Modifier`
+
+**Affected files:**
+
+- NEW: `ui/theme/Color.kt`
+- NEW: `ui/theme/Spacing.kt`
+- NEW: `ui/theme/Shape.kt`
+- NEW: `ui/theme/Stroke.kt` (gộp với Spacing nếu nhỏ)
+- NEW: `ui/theme/Elevation.kt`
+- NEW: `ui/theme/Typography.kt`
+- MODIFY: `ui/theme/Theme.kt` — replace MaterialTheme-only với `IPayTheme` (giữ alias `BehavioralFraudTheme` cho `MainActivity`)
+- NEW: `ui/components/SafeClickable.kt`
+- NEW: `ui/components/IPayButton.kt` (gộp `IPayIconButton`)
+- NEW: `ui/components/IPayTextField.kt`
+- NEW: `ui/components/IPayTopBar.kt`
+- NEW: `ui/components/IPayCard.kt`
+- NEW: `ui/components/IPayChip.kt` (gộp `IPayAIChip`)
+- NEW: `ui/components/IPayAlertBanner.kt`
+- NEW: `ui/components/IPayBottomSheet.kt`
+- NEW: `ui/components/IPayToggle.kt`
+- NEW: `ui/components/IPaySelection.kt`
+- NEW: `ui/components/IPayHorizontalTabs.kt`
+- NEW: `ui/components/IPayBadge.kt` (gộp `IPayStatusBadge` + `IPayNotificationBadge`)
+- NEW: `ui/screens/DesignSystemPreviewScreen.kt` (accessed via Dev Menu)
+
+**Acceptance criteria:**
+
+- [ ] Tất cả 8 token files compile, không có TODO/FIXME chưa giải quyết
+- [ ] `IPayTheme.colors.brandPrimary` == `#005BAA` (Figma `text/textBrandPrimary`)
+- [ ] 13 components (REQ-09..22) build được, render đúng trong `DesignSystemPreviewScreen`
+- [ ] `safeClickable` debounce 350ms — double-tap test không gây 2 lần navigation
+- [ ] Không screen nào trong codebase còn `Color(0xFF…)` literal hoặc `.dp` hard-code spacing (trừ token file)
+- [ ] App compile + run + mở preview qua Dev Menu không crash
+- [ ] Mọi component có `Modifier` param đầu tiên không phải `text`/`onClick` (Compose convention)
+- [ ] Lint sạch (`./gradlew lint` không add warning mới)
+
+---
+
+### FR-CL-09: Authentication Flow — Login + Touch ID
+
+**Description:** Màn login mở app, mô phỏng iPay: chào người dùng + nhập PIN 6 số + Touch ID (biometric). Login KHÔNG nằm trong behavioral fraud session — chỉ là authentication. Tuy nhiên có thể thu thập login signal riêng (debug only).
+
+**Scope:** 1 screen + biometric integration + navigation tới Home. KHÔNG có behavioral session active ở screen này.
+
+**New screens:**
+
+| REQ-ID | Screen | Description |
+|--------|--------|-------------|
+| REQ-01 | `LoginScreen` | Top: logo VietinBank (placeholder asset OK) + greeting "Xin chào, [Username]". Middle: 6 PIN dots + numeric keypad (3×4). Bottom: "Dùng Touch ID" button + "Quên mật khẩu?" link. Background `bgNeutralPrimary` hoặc subtle gradient brand light. |
+
+**New components — supporting Login:**
+
+| REQ-ID | Component | Description |
+|--------|-----------|-------------|
+| REQ-02 | `IPayPinDots` | Hiển thị 6 ô PIN, ô đã nhập = filled circle `brandPrimary`, ô chưa nhập = empty `borderNeutralPrimary`. Animation: filled bounce nhẹ khi nhập. Reuse được cho OTP screen ở chế độ "show digit". |
+| REQ-03 | `IPayNumericKeypad` | 3×4 grid: 1-9, 0, biometric icon (trái), backspace (phải). Mỗi nút round 64dp, ripple + `safeClickable`. Phát audio click khi tap (optional, theo iPay). |
+
+**Authentication logic:**
+
+| REQ-ID | Behavior | Description |
+|--------|----------|-------------|
+| REQ-04 | Touch ID launch | Click "Dùng Touch ID" → `BiometricPrompt.authenticate()` (androidx.biometric). Sử dụng `BiometricManager.canAuthenticate()` để check: `BIOMETRIC_SUCCESS` → show button; `NO_HARDWARE` / `NONE_ENROLLED` / `SECURITY_UPDATE_REQUIRED` → ẩn button. Nếu success → vào Home. Fail → toast hoặc inline error. |
+| REQ-05 | PIN auth (mock) | Nhập đủ 6 số → auto-submit. POC mock: PIN nào cũng pass → vào Home. Gate behind `BuildConfig.DEBUG` hoặc log warning rõ "POC PIN mock — KHÔNG dùng cho production". |
+
+**Behavioral coverage (KHÔNG share với transfer session):**
+
+| REQ-ID | Hook | Description |
+|--------|------|-------------|
+| REQ-06 | Login signal riêng (optional, debug) | LoginScreen có thể dùng 1 collector instance riêng (key DataStore `login_behavioral_session`) để capture PIN keystroke rhythm — chỉ phục vụ debug/inspect qua Dev Menu, KHÔNG share session id với transfer flow, KHÔNG gửi backend. Implementation có thể skip nếu không cần debug login behavior. |
+
+**Constraints:**
+
+- Dùng `androidx.biometric:biometric:1.2.0-alpha05` hoặc latest stable (1.1.0 đã outdated)
+- KHÔNG persist PIN — POC mock pass mọi giá trị
+- Login KHÔNG mở `transfer behavioral session` — session thật bắt đầu ở Home tap "Chuyển tiền"
+- Greeting username hard-code "Vandz" (POC) — sau có thể đọc từ profile
+
+**Affected files:**
+
+- NEW: `ui/screens/login/LoginScreen.kt`
+- NEW: `ui/screens/login/LoginViewModel.kt` (state + biometric launcher)
+- NEW: `ui/components/IPayPinDots.kt`
+- NEW: `ui/components/IPayNumericKeypad.kt`
+- MODIFY: `MainActivity.kt` — `LoginScreen` là start destination, sau auth → Home (qua NavHost FR-CL-10 REQ-09)
+- MODIFY: `app/build.gradle.kts` — thêm `androidx.biometric:biometric:1.2.0-alpha05`
+
+**Acceptance criteria:**
+
+- [ ] App khởi động → vào `LoginScreen`, không còn vào Home trực tiếp
+- [ ] Nhập 6 số PIN → tự động navigate sang Home
+- [ ] `BiometricManager.canAuthenticate()` không trả `BIOMETRIC_SUCCESS` → button Touch ID ẩn
+- [ ] Trên device có biometric → tap button → biometric prompt hiện → success vào Home
+- [ ] BehavioralCollector KHÔNG có session active sau khi login (vào Home rồi vẫn idle)
+- [ ] Quay lại Login (vd back button từ Home) reset PIN dots về empty
+
+---
+
+### FR-CL-10: Transfer Flow E2E (iPay Skin) + Silent Behavioral Pipeline
+
+**Description:** Skin/làm lại 7 màn của flow chuyển tiền iPay — từ Home đến Thành công, qua decision point "vượt hạn mức Napas". Mục tiêu visual fidelity 80%+ vs Figma `1:15393` để team nội bộ dùng như app thật. Behavioral collection chạy ngầm trong scope transfer flow; profile build + verification ẩn hoàn toàn khỏi UI thật.
+
+**Scope:** 7 màn (5 mới + 2 skin lại) + state machine + silent behavioral pipeline + Dev Menu.
+
+**New / updated screens:**
+
+| REQ-ID | Screen | Action | Description |
+|--------|--------|--------|-------------|
+| REQ-01 | `HomeIPayScreen` | REPLACE `HomeScreen` | Top: header gradient brand + greeting + avatar + IPayNotificationBadge. Quick balance card (số dư mock). Action grid 4×N (Chuyển tiền trong nước, Nạp tiền, Thanh toán, …) — mỗi item là `IPayCard` icon + label. Promotions row dùng card thường (KHÔNG dùng IPayAIChip — AIChip dành cho AI features). **KHÔNG hiển thị**: enrollment count, "Chế độ ENROLLMENT/VERIFICATION" toggle, profile status, "Cách hoạt động" guide, "Xóa dữ liệu" button — toàn bộ chuyển vào Dev Menu. **Hidden affordance**: long-press logo top-left 1.5s → navigate `DevMenuScreen`. Tap "Chuyển tiền trong nước" action → trigger `collector.startSession()` rồi navigate `TransferTypeScreen`. |
+| REQ-02 | `TransferTypeScreen` | NEW | Top bar "Chuyển tiền". Body: 2 `IPaySelection` cards — "Chuyển trong VietinBank" / "Chuyển liên ngân hàng (Napas)" — kèm description + icon. Tap → navigate sang `RecipientScreen` với arg `transferType`. |
+| REQ-03 | `RecipientScreen` | NEW | Top bar "Người nhận". Section "Nhập số tài khoản" với `IPayTextField` (keyboard `Number`) — focus đầu tiên (account_number trước bank_select). Section "Chọn ngân hàng" — list scrollable các bank (mock data ~20 banks, mỗi item `IPayCard` flat icon + tên). Section "Gần đây" — row `IPayChip` các STK gần đây (mock 3 items). Button "Tiếp tục" sticky bottom, disabled cho đến khi đủ STK + bank. |
+| REQ-04 | `TransferFormScreen` | REPLACE `TransferScreen` | Top bar "Khởi tạo chuyển tiền". Sticky top: card hiển thị thông tin người nhận (đã chọn ở màn trước). Form: `IPayTextField` Số tiền (Number, format thousand-separator) + `IPayTextField` Nội dung (Text, 100 ký tự). Source selector: `IPaySelection` chọn nguồn tiền (mặc định "Tài khoản thanh toán"). `IPayAlertBanner` info hiển thị hạn mức Napas còn lại (mock). Button "Tiếp tục" sticky bottom. Khi user nhập số tiền > hạn mức Napas → set state `state.overLimit = true`. |
+| REQ-05 | `OverNapasLimitBottomSheet` | NEW | `IPayBottomSheet` trigger khi `overLimit && tap "Tiếp tục"`. Header icon warning + tiêu đề "Vượt hạn mức Napas". Body text giải thích + so sánh hạn mức. Footer 2 button: Primary "Chuyển bằng kênh thường" + Ghost "Huỷ". Tap primary → đóng sheet → set `state.transferChannel = "regular"` → navigate `OtpScreen`. |
+| REQ-06 | `OtpScreen` | NEW | Top bar "Xác thực OTP". Body: tiêu đề "Nhập mã OTP" + body subtitle "Mã đã gửi tới ****1234". 6 ô OTP (reuse `IPayPinDots` ở mode "show digit") + numeric keypad. Counter "Gửi lại sau 60s" + button "Gửi lại" sau khi count xong. Nhập đủ 6 số → auto-submit → loading 1.5s (mock) → navigate `TransferSuccessScreen`. |
+| REQ-07 | `TransferSuccessScreen` | REPLACE `TransferResultViews` | Full screen success **production-feel**. Top icon `IPayStatusBadge` Success large. Tiêu đề "Chuyển tiền thành công" + số tiền lớn. Card chi tiết giao dịch (người nhận, STK, ngân hàng, nội dung, mã GD, thời gian). Button row: Primary "Về trang chủ" + Secondary "Lưu biên lai". **KHÔNG hiển thị** "Phân tích rủi ro" / risk score / verification result — toàn bộ chuyển vào Dev Menu > Risk History. UI trông như iPay thật, không có dấu vết POC. |
+
+**State machine — TransferOrchestratorViewModel:**
+
+| REQ-ID | State | Description |
+|--------|-------|-------------|
+| REQ-08 | Single VM bao flow | `TransferOrchestratorViewModel` quản lý: `transferType`, `recipient`, `amount`, `note`, `source`, `transferChannel`, `otp`, `txStatus`. State tích hợp `riskResult` (lưu silent, KHÔNG bind UI) chỉ để Dev Menu đọc. Dùng `Channel<TransferEvent>` cho navigation events (CLAUDE.md mandatory cho banking). |
+
+**Navigation:**
+
+| REQ-ID | Item | Description |
+|--------|------|-------------|
+| REQ-09 | NavController + NavHost | **Replace `MainActivity.kt:30` switch-case `when (currentScreen)` bằng `NavHost`** (verified: code hiện dùng switch-case, KHÔNG phải NavHost — CLAUDE.md mô tả sai). Routes: `login`, `home`, `transfer/type`, `transfer/recipient`, `transfer/form`, `transfer/otp`, `transfer/success`, `dev`, `dev/profile`, `dev/risk-history`, `dev/session`, `dev/design-system`. Pass arg qua `SavedStateHandle` hoặc nav arg, không dùng global state. |
+
+**Silent behavioral pipeline:**
+
+| REQ-ID | Hook | Description |
+|--------|------|-------------|
+| REQ-10 | Session lifecycle gắn với transfer flow | `TransferOrchestratorViewModel.init { collector.startSession() }`. `onCleared() { if (!sessionEnded) collector.stopSession() }` để cover abort cases. Success path explicit gọi `collector.stopSession()` + persist BehavioralSession history. Background > 30s → end session với reason "backgrounded". 1 giao dịch = 1 session id độc lập. **LoginScreen + HomeScreen browsing KHÔNG nằm trong session.** |
+| REQ-11 | Touch interceptor | Mỗi màn trong transfer flow (TransferType, Recipient, Form, OtpScreen, Success) wrap với `pointerInteropFilter` gọi `collector.onTouchEvent()`. `IPayBottomSheet` cũng phải wrap. **Home + Login KHÔNG wrap.** |
+| REQ-12 | Field focus sequence | Mỗi `IPayTextField` (STK, amount, note, otp) nối field name vào `collector.onFieldFocus(fieldName)` (đúng tên hàm hiện tại trong BehavioralCollector). Sequence cuối session = `account_number → bank_select → amount → note → otp` (KHÔNG có `pin_pad` vì PIN entry ở Login không nằm trong session). |
+| REQ-13 | Decision time over-limit | `OverNapasLimitBottomSheet` ghi `bottomSheetShownTimestamp` khi mở, `bottomSheetDecisionMs` khi user tap primary/cancel — feature mới `decisionTimeOverLimitMs` (long, default 0) thêm vào `BehavioralFeatures`. |
+| REQ-14 | Paste detection trên OTP | Field OTP có hook detect paste — dùng `lengthDelta >= 3` của `onTextChanged` hiện tại. Set flag riêng `otpPasted: boolean` trong `BehavioralFeatures` (default false). |
+| REQ-15 | Silent baseline accumulation + verification | Khi tap "Tiếp tục" ở OtpScreen (trước navigate Success): extract features → đọc profile từ DataStore. Nếu chưa đủ N=3 baseline sessions → `BackendClient.enrollSession()` lưu baseline; đủ N → backend tự build profile, lưu DataStore. Nếu đã có profile → `BackendClient.verifyTransaction()` → response `riskScore + reasoning`. **Lưu silent vào `verification_history` DataStore với timestamp**, KHÔNG hiển thị trên Success screen. LocalScorer fallback khi backend down. Toàn bộ pipeline chạy trong `withContext(Dispatchers.IO)`, KHÔNG block UI navigate sang Success. |
+
+**Dev Menu (test harness, ẩn khỏi user):**
+
+| REQ-ID | Screen | Description |
+|--------|--------|-------------|
+| REQ-16 | `DevMenuScreen` | Truy cập qua long-press logo Home 1.5s. Top bar "Dev Menu (POC only)". List entries: Profile Inspector / Risk Score History / Session Inspector / Manual Override / Design System Preview / Clear All Data. Mỗi entry navigate sang sub-screen riêng. |
+| REQ-17 | `ProfileInspectorScreen` | Show profile JSON hiện tại trong DataStore (LLM-generated summary + baseline features). Nếu chưa có profile → "Chưa đủ baseline (X/3 transactions)". Button "Xem features baseline" mở list raw features đã capture. |
+| REQ-18 | `RiskHistoryScreen` | Timeline list các verification trong DataStore: timestamp + riskScore (0-100) + reasoning + transaction summary. Sort newest first. Empty state "Chưa có verification". Button "Clear history" với confirmation. |
+| REQ-19 | `SessionInspectorScreen` | Live view session hiện tại đang collect (nếu có): touch count, sensor std, current focused field, elapsed ms. Refresh mỗi 500ms. Empty state "Không có session active" khi ở ngoài transfer flow. |
+| REQ-20 | `ManualOverrideScreen` | Test scenario controls: [Reset profile] (xoá profile để build lại), [Clear baseline candidates], [Show next risk score on Success] toggle (cho phép hiển thị 1 lần next time để demo), [Force backend down] toggle (test LocalScorer fallback). Mỗi action có confirmation dialog. |
+
+**Constraints:**
+
+- Visual fidelity ≥ 80% vs Figma — kiểm bằng visual diff manual: chụp Figma export PNG cho từng frame + screenshot device tương ứng, attach side-by-side trong PR description
+- KHÔNG dùng `clickable`, KHÔNG hard-code màu/font/dp (CLAUDE.md mandatory)
+- Mọi navigation đi qua Channel event (one-time event), KHÔNG StateFlow (tránh duplicate trigger sau rotation)
+- File mỗi screen ≤ 500 dòng — tách composable phụ nếu cần
+- Mock data (banks, balance, recipient suggestions) sống trong `data/mock/` package mới, KHÔNG hard-code trong screen
+- KHÔNG tạo `strings.xml` nội bộ — strings tiếng Việt inline trong screen vì là POC; sau migrate khi scale
+- **Production-feel rule**: HomeIPayScreen + TransferSuccessScreen KHÔNG được lộ bất kỳ string/UI nào liên quan tới "enrollment", "verification", "risk", "behavior", "fraud", "POC" — toàn bộ chuyển sang Dev Menu
+
+**Affected files:**
+
+- NEW: `ui/screens/login/LoginScreen.kt` (đã ở FR-CL-09)
+- MODIFY: `ui/screens/HomeScreen.kt` → `HomeIPayScreen` (full rewrite, **strip enrollment UI**)
+- NEW: `ui/screens/transfer/TransferTypeScreen.kt`
+- NEW: `ui/screens/transfer/RecipientScreen.kt`
+- MODIFY: `ui/screens/TransferScreen.kt` → `TransferFormScreen.kt` (rename + rewrite, giữ behavioral hook)
+- NEW: `ui/screens/transfer/OverNapasLimitBottomSheet.kt`
+- NEW: `ui/screens/transfer/OtpScreen.kt`
+- MODIFY: `ui/screens/TransferResultViews.kt` → `TransferSuccessScreen.kt` (rewrite, **strip risk score UI**)
+- NEW: `ui/screens/transfer/TransferOrchestratorViewModel.kt`
+- NEW: `ui/screens/dev/DevMenuScreen.kt`
+- NEW: `ui/screens/dev/ProfileInspectorScreen.kt`
+- NEW: `ui/screens/dev/RiskHistoryScreen.kt`
+- NEW: `ui/screens/dev/SessionInspectorScreen.kt`
+- NEW: `ui/screens/dev/ManualOverrideScreen.kt`
+- MODIFY: `ui/screens/ProfileScreen.kt` → MOVE to `ui/screens/dev/ProfileInspectorScreen.kt` (rewrite based on existing logic)
+- NEW: `data/mock/MockData.kt` — banks list, recipients, balance
+- MODIFY: `data/model/BehavioralModels.kt` — thêm `decisionTimeOverLimitMs: Long = 0`, `otpPasted: Boolean = false`
+- MODIFY: `data/repository/ProfileRepository.kt` — thêm methods cho `verification_history` DataStore key (list of {timestamp, riskScore, reasoning, txSummary})
+- MODIFY: `data/collector/BehavioralCollector.kt` — log decision time hook (REQ-13). API hiện có (`startSession/stopSession/onFieldFocus/onTextChanged/onTouchEvent`) đủ dùng, KHÔNG cần rename.
+- MODIFY: `MainActivity.kt:30` — replace `when (currentScreen)` switch-case bằng `NavHost`
+- MODIFY: `ui/screens/TransferViewModel.kt` — refactor: tách phần "POC test concept" (enrollment count, mode toggle UI state) ra khỏi production VM, chuyển logic vào `TransferOrchestratorViewModel` mới + Dev Menu VMs
+
+**Acceptance criteria:**
+
+- [ ] App khởi động: Login → Home iPay (production-feel) → Transfer flow → Success
+- [ ] HomeIPayScreen KHÔNG có chữ "Enrollment", "Verification", "Profile", "Behavior" hiển thị
+- [ ] TransferSuccessScreen KHÔNG hiển thị risk score / "Phân tích rủi ro" card
+- [ ] 7 màn render đúng theo Figma — không còn dấu vết Material default (vd `TopAppBar` Material xanh đậm cũ)
+- [ ] Bottom sheet vượt hạn mức trigger đúng khi amount > hạn mức mock (vd 10,000,000 VND)
+- [ ] Behavioral session bắt đầu khi tap "Chuyển tiền trong nước" Home; kết thúc ở Success/abort
+- [ ] `sessionDurationMs` chỉ cover từ Home tap đến Success, KHÔNG bao gồm Login + Home browsing
+- [ ] Field focus sequence ghi đúng `account_number → bank_select → amount → note → otp` (KHÔNG có pin_pad)
+- [ ] User abort giữa flow (back từ Form/OTP) → session vẫn end đúng cách (VM cleared → stopSession called)
+- [ ] OTP screen: paste 6 số từ clipboard → flag `otpPasted = true`
+- [ ] `decisionTimeOverLimitMs` > 0 khi user thấy bottom sheet và tap → đo được hesitation
+- [ ] Backend `verifyTransaction()` hoặc `enrollSession()` được gọi 1 lần ở OTP submit, không gọi nhiều lần
+- [ ] Verification result lưu vào `verification_history` DataStore, **không hiển thị Success screen**
+- [ ] Long-press logo Home 1.5s → vào DevMenuScreen
+- [ ] Dev Menu > Risk History hiển thị verification history với timestamp + score + reasoning
+- [ ] Dev Menu > Manual Override > Reset profile → xoá profile + baseline, lần giao dịch tiếp theo build lại baseline
+- [ ] LocalScorer fallback hoạt động khi backend down (giống FR-CL-02)
+- [ ] Rotation device trên mọi màn input → không duplicate navigation, không mất dữ liệu form
