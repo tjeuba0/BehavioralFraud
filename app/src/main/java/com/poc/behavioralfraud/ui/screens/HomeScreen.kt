@@ -26,6 +26,7 @@ fun HomeScreen(
     profile: BehavioralProfile?,
     onNavigateToTransfer: () -> Unit,
     onNavigateToProfile: () -> Unit,
+    onNavigateToThemePreview: () -> Unit = {},
     onClearData: () -> Unit
 ) {
     var showClearDialog by remember { mutableStateOf(false) }
@@ -184,6 +185,15 @@ fun HomeScreen(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Xóa tất cả dữ liệu", color = Color(0xFFD32F2F))
+            }
+
+            // TASK-010 temp dev affordance — removed when HomeScreen rewrites at TASK-017.
+            Spacer(modifier = Modifier.height(8.dp))
+            TextButton(
+                onClick = onNavigateToThemePreview,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Theme preview (TASK-010 dev only)")
             }
         }
     }
