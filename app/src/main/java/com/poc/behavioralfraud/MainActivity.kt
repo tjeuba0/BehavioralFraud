@@ -1,11 +1,11 @@
 package com.poc.behavioralfraud
 
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -17,9 +17,18 @@ import com.poc.behavioralfraud.ui.screens.HomeScreen
 import com.poc.behavioralfraud.ui.screens.ProfileScreen
 import com.poc.behavioralfraud.ui.screens.TransferScreen
 import com.poc.behavioralfraud.ui.screens.TransferViewModel
+import com.poc.behavioralfraud.ui.screens.login.LoginScreen
 import com.poc.behavioralfraud.ui.theme.BehavioralFraudTheme
 
-class MainActivity : ComponentActivity() {
+/**
+ * Hosts the entire Compose tree.
+ *
+ * Extends [FragmentActivity] (not bare ComponentActivity) — required by
+ * `androidx.biometric.BiometricPrompt` used in [LoginScreen]. FragmentActivity
+ * is fully compose-compatible (activity-compose's setContent is an extension
+ * on ComponentActivity, FragmentActivity inherits it).
+ */
+class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -38,8 +47,8 @@ class MainActivity : ComponentActivity() {
  * transfer flow, TASK-024 Dev Menu) extend this graph by adding `composable(...)`
  * blocks for new routes.
  *
- * Start destination: [AppRoutes.HOME] for now. Will switch to [AppRoutes.LOGIN]
- * at TASK-016 when LoginScreen lands.
+ * Start destination: [AppRoutes.LOGIN] (TASK-016). After auth, navigate to
+ * [AppRoutes.HOME] popping LOGIN inclusive so back from Home exits app.
  */
 @Composable
 fun AppNavigation() {
@@ -51,8 +60,17 @@ fun AppNavigation() {
 
     NavHost(
         navController = navController,
-        startDestination = AppRoutes.HOME,
+        startDestination = AppRoutes.LOGIN,
     ) {
+        composable(AppRoutes.LOGIN) {
+            LoginScreen(
+                onAuthenticated = {
+                    navController.navigate(AppRoutes.HOME) {
+                        popUpTo(AppRoutes.LOGIN) { inclusive = true }
+                    }
+                },
+            )
+        }
         composable(AppRoutes.HOME) {
             HomeRoute(navController = navController, viewModel = viewModel)
         }
