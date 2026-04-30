@@ -273,11 +273,13 @@ private fun Modifier.blurCompat(radius: androidx.compose.ui.unit.Dp): Modifier =
 @Composable
 private fun BgDecorativeComposition() {
     // Figma Group 1171275885 — decorative SVG composition 245.907×128 at
-    // (-54.41, 137).
+    // (-54.41, 137). Subtle decorative layer behind profile section, not focal.
+    // Alpha kept low so the avatar/content sits visually on top.
     Image(
         painter = painterResource(R.drawable.bg_premium_main),
         contentDescription = null,
         contentScale = ContentScale.Fit,
+        alpha = 0.35f,
         modifier = Modifier
             .offset(x = (-54).dp, y = 137.dp)
             .width(246.dp)
@@ -343,9 +345,11 @@ private fun HomeTopBar(onLongPressLogo: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        // Logo composite — Figma 1:15546 "LogoApplication" Standard Dynamic on-color-bg
-        // Layout (96×40): top 60% Vietin full logo (red bird + wordmark),
-        // bottom 40% split: left iPay logo + right Mobile Banking text.
+        // Logo composite — Figma 1:15546 "LogoApplication" Standard Dynamic on-color-bg.
+        // Box 96×40 with absolute-positioned children using exact Figma inset percentages:
+        //   - Vietin_full:    inset[0  0  40%  0]            → (0,0)   96×24
+        //   - LOGO_iPay:      inset[67.78% 67.81% 2.5% 7.42%] → (7.12, 27.11)  ~23.78×11.89
+        //   - Mobile Banking: inset[67.78% 20.23% 6.79% 36.84%] → (35.37, 27.11) ~41.21×10.17
         // Long-press → Dev Menu.
         Box(
             modifier = Modifier
@@ -357,43 +361,41 @@ private fun HomeTopBar(onLongPressLogo: () -> Unit) {
                     role = Role.Button,
                 ),
         ) {
-            // Top zone: Vietin full logo (60% height)
+            val w = HomeIPay.Size.LogoWidth
+            val h = HomeIPay.Size.LogoHeight
+            // Vietin_full: top zone (full width, 60% height = 24dp)
             Image(
                 painter = painterResource(R.drawable.logo_vietin_full),
                 contentDescription = "VietinBank",
                 contentScale = ContentScale.Fit,
+                alignment = Alignment.TopStart,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(HomeIPay.Size.LogoHeight * 0.60f)
-                    .align(Alignment.TopStart),
+                    .offset(x = 0.dp, y = 0.dp)
+                    .width(w)
+                    .height(h * 0.60f),
             )
-            // Bottom zone: iPay text + Mobile Banking text side by side
-            Row(
+            // iPay: bottom-left small mark
+            Image(
+                painter = painterResource(R.drawable.logo_ipay_text),
+                contentDescription = "iPay",
+                contentScale = ContentScale.Fit,
+                alignment = Alignment.TopStart,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(HomeIPay.Size.LogoHeight * 0.40f)
-                    .align(Alignment.BottomStart)
-                    .padding(start = HomeIPay.Size.LogoWidth * 0.07f),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Image(
-                    painter = painterResource(R.drawable.logo_ipay_text),
-                    contentDescription = "iPay",
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier
-                        .height(HomeIPay.Size.LogoHeight * 0.32f)
-                        .width(HomeIPay.Size.LogoWidth * 0.18f),
-                )
-                Spacer(Modifier.width(HomeIPay.Sp.S4))
-                Image(
-                    painter = painterResource(R.drawable.logo_mobile_banking),
-                    contentDescription = "Mobile Banking",
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier
-                        .height(HomeIPay.Size.LogoHeight * 0.30f)
-                        .width(HomeIPay.Size.LogoWidth * 0.45f),
-                )
-            }
+                    .offset(x = w * 0.0742f, y = h * 0.6778f)
+                    .width(w * 0.2477f)   // 100 - 67.81 - 7.42 = 24.77%
+                    .height(h * 0.2972f), // 100 - 67.78 - 2.5 = 29.72%
+            )
+            // Mobile Banking: bottom-right wordmark
+            Image(
+                painter = painterResource(R.drawable.logo_mobile_banking),
+                contentDescription = "Mobile Banking",
+                contentScale = ContentScale.Fit,
+                alignment = Alignment.TopStart,
+                modifier = Modifier
+                    .offset(x = w * 0.3684f, y = h * 0.6778f)
+                    .width(w * 0.4293f)   // 100 - 20.23 - 36.84 = 42.93%
+                    .height(h * 0.2543f), // 100 - 67.78 - 6.79 = 25.43%
+            )
         }
 
         Row(
