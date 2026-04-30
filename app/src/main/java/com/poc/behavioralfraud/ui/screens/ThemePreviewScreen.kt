@@ -152,9 +152,144 @@ fun ThemePreviewScreen(onBack: () -> Unit) {
 
             Spacer(Modifier.height(IPayTheme.spacing.s32))
 
+            // ─── TASK-011 components showcase ───────────────────────────
+            Text(
+                text = "TASK-011 components",
+                style = IPayTheme.typography.titleMedium,
+                color = IPayTheme.colors.textNeutralPrimary,
+            )
+            Spacer(Modifier.height(IPayTheme.spacing.s8))
+            Task011ComponentsShowcase()
+
+            Spacer(Modifier.height(IPayTheme.spacing.s32))
+
             TextButton(onClick = onBack) {
                 Text("Back", color = IPayTheme.colors.buttonGhostLabel)
             }
+        }
+    }
+}
+
+@Composable
+private fun Task011ComponentsShowcase() {
+    var fieldValue by remember { mutableStateOf("") }
+    var safeClickCount by remember { mutableStateOf(0) }
+    var rapidClickAttempts by remember { mutableStateOf(0) }
+
+    com.poc.behavioralfraud.ui.components.IPayCard(
+        variant = com.poc.behavioralfraud.ui.components.IPayCardVariant.Outlined,
+    ) {
+        Column {
+            // Buttons — variants
+            Text(
+                "IPayButton — variants",
+                style = IPayTheme.typography.bodyEmphasizedSmall,
+                color = IPayTheme.colors.textNeutralSecondary,
+            )
+            Spacer(Modifier.height(IPayTheme.spacing.s8))
+            com.poc.behavioralfraud.ui.components.IPayButton(
+                text = "Primary (gradient)",
+                onClick = {
+                    rapidClickAttempts += 1
+                    safeClickCount += 1
+                },
+                variant = com.poc.behavioralfraud.ui.components.IPayButtonVariant.Primary,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(IPayTheme.spacing.s8))
+            com.poc.behavioralfraud.ui.components.IPayButton(
+                text = "Secondary",
+                onClick = { safeClickCount += 1 },
+                variant = com.poc.behavioralfraud.ui.components.IPayButtonVariant.Secondary,
+                size = com.poc.behavioralfraud.ui.components.IPayButtonSize.Medium,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(IPayTheme.spacing.s8))
+            com.poc.behavioralfraud.ui.components.IPayButton(
+                text = "Ghost (small)",
+                onClick = { safeClickCount += 1 },
+                variant = com.poc.behavioralfraud.ui.components.IPayButtonVariant.Ghost,
+                size = com.poc.behavioralfraud.ui.components.IPayButtonSize.Small,
+            )
+
+            Spacer(Modifier.height(IPayTheme.spacing.s12))
+            Text(
+                text = "safeClickable test: rapid taps tried = $rapidClickAttempts, accepted = $safeClickCount " +
+                    "(should match if you tap with > 350ms gap; differs if you double-tap fast — primary button only counts attempts)",
+                style = IPayTheme.typography.bodySmall,
+                color = IPayTheme.colors.textNeutralTertiary,
+            )
+
+            Spacer(Modifier.height(IPayTheme.spacing.s16))
+
+            // TextField — states
+            Text(
+                "IPayTextField",
+                style = IPayTheme.typography.bodyEmphasizedSmall,
+                color = IPayTheme.colors.textNeutralSecondary,
+            )
+            Spacer(Modifier.height(IPayTheme.spacing.s8))
+            com.poc.behavioralfraud.ui.components.IPayTextField(
+                value = fieldValue,
+                onValueChange = { fieldValue = it },
+                label = "Số tài khoản",
+                placeholder = "VD: 12345678",
+                helperText = "Nhập STK người nhận",
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(IPayTheme.spacing.s8))
+            com.poc.behavioralfraud.ui.components.IPayTextField(
+                value = "Lỗi giả lập",
+                onValueChange = {},
+                label = "Field with error",
+                errorText = "STK không hợp lệ",
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(IPayTheme.spacing.s8))
+            com.poc.behavioralfraud.ui.components.IPayTextField(
+                value = "Disabled value",
+                onValueChange = {},
+                label = "Disabled",
+                enabled = false,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            Spacer(Modifier.height(IPayTheme.spacing.s16))
+
+            // Card variants — show 3 variants stacked
+            Text(
+                "IPayCard variants",
+                style = IPayTheme.typography.bodyEmphasizedSmall,
+                color = IPayTheme.colors.textNeutralSecondary,
+            )
+            Spacer(Modifier.height(IPayTheme.spacing.s8))
+            CardVariantsRow()
+        }
+    }
+}
+
+@Composable
+private fun CardVariantsRow() {
+    Column {
+        com.poc.behavioralfraud.ui.components.IPayCard(
+            variant = com.poc.behavioralfraud.ui.components.IPayCardVariant.Plain,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Plain card", style = IPayTheme.typography.bodyMedium)
+        }
+        Spacer(Modifier.height(IPayTheme.spacing.s8))
+        com.poc.behavioralfraud.ui.components.IPayCard(
+            variant = com.poc.behavioralfraud.ui.components.IPayCardVariant.Elevated,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Elevated card (shadow)", style = IPayTheme.typography.bodyMedium)
+        }
+        Spacer(Modifier.height(IPayTheme.spacing.s8))
+        com.poc.behavioralfraud.ui.components.IPayCard(
+            variant = com.poc.behavioralfraud.ui.components.IPayCardVariant.Outlined,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Outlined card", style = IPayTheme.typography.bodyMedium)
         }
     }
 }
