@@ -22,7 +22,6 @@ import com.poc.behavioralfraud.ui.screens.transfer.RecipientScreen
 import com.poc.behavioralfraud.ui.screens.transfer.TransferFormScreen
 import com.poc.behavioralfraud.ui.screens.transfer.TransferOrchestratorViewModel
 import com.poc.behavioralfraud.ui.screens.transfer.TransferType
-import com.poc.behavioralfraud.ui.screens.transfer.TransferTypeScreen
 import com.poc.behavioralfraud.ui.theme.BehavioralFraudTheme
 
 /**
@@ -85,23 +84,16 @@ fun AppNavigation() {
                 orchestratorVm = orchestratorVm,
             )
         }
-        composable(AppRoutes.TRANSFER_TYPE) {
-            TransferTypeScreen(
-                onTypeSelected = { type ->
-                    orchestratorVm.setTransferType(type)
-                    navController.navigate("${AppRoutes.TRANSFER_RECIPIENT}/${type.name}")
-                },
-                onBack = { navController.popBackStack() },
-            )
-        }
-        composable("${AppRoutes.TRANSFER_RECIPIENT}/{transferType}") { backStackEntry ->
-            val typeName = backStackEntry.arguments?.getString("transferType")
-                ?: TransferType.Internal.name
-            val transferType = runCatching { TransferType.valueOf(typeName) }
-                .getOrDefault(TransferType.Internal)
+        // TransferTypeScreen removed — does not exist in Figma 1:15393.
+        // Home tap "Chuyển tiền trong nước" navigates directly to Recipient,
+        // which determines transferType from the bank user picks (VietinBank →
+        // Internal, others → Napas).
+        composable(AppRoutes.TRANSFER_RECIPIENT) {
             RecipientScreen(
-                transferType = transferType,
+                transferType = TransferType.Internal,  // default; refactor via bank pick at next Recipient fidelity rewrite
                 onContinue = { accountNumber, bank ->
+                    val derivedType = if (bank.code == "CTG") TransferType.Internal else TransferType.Napas
+                    orchestratorVm.setTransferType(derivedType)
                     orchestratorVm.setRecipient(accountNumber, bank)
                     navController.navigate(AppRoutes.TRANSFER_FORM)
                 },
@@ -159,7 +151,7 @@ private fun HomeRoute(
             // Reset orchestrator state so each transfer flow starts fresh.
             // (Behavioral session start lands in TASK-023.)
             orchestratorVm.reset()
-            navController.navigate(AppRoutes.TRANSFER_TYPE)
+            navController.navigate(AppRoutes.TRANSFER_RECIPIENT)
         },
         onNavigateToDevPreview = { navController.navigate(AppRoutes.DESIGN_SYSTEM_LEGACY) },
     )
