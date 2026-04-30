@@ -19,6 +19,8 @@ import com.poc.behavioralfraud.ui.screens.TransferScreen
 import com.poc.behavioralfraud.ui.screens.TransferViewModel
 import com.poc.behavioralfraud.ui.screens.login.LoginScreen
 import com.poc.behavioralfraud.ui.screens.transfer.RecipientScreen
+import com.poc.behavioralfraud.ui.screens.transfer.TransferFormScreen
+import com.poc.behavioralfraud.ui.screens.transfer.TransferOrchestratorViewModel
 import com.poc.behavioralfraud.ui.screens.transfer.TransferType
 import com.poc.behavioralfraud.ui.screens.transfer.TransferTypeScreen
 import com.poc.behavioralfraud.ui.theme.BehavioralFraudTheme
@@ -56,10 +58,12 @@ class MainActivity : FragmentActivity() {
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
-    // Single shared TransferViewModel scoped to MainActivity — preserves existing
-    // POC behavior. Will be replaced by per-flow VM at TASK-019
-    // (TransferOrchestratorViewModel) when transfer flow splits across screens.
+    // Legacy POC VM still drives TRANSFER_LEGACY route (existing TransferScreen)
+    // until TASK-024 absorbs its enrollment/verification UI into Dev Menu.
     val viewModel: TransferViewModel = viewModel()
+    // New orchestrator VM owning the production-feel transfer flow state
+    // (TransferType → Recipient → Form → Otp → Success).
+    val orchestratorVm: TransferOrchestratorViewModel = viewModel()
 
     NavHost(
         navController = navController,
@@ -75,11 +79,16 @@ fun AppNavigation() {
             )
         }
         composable(AppRoutes.HOME) {
-            HomeRoute(navController = navController, viewModel = viewModel)
+            HomeRoute(
+                navController = navController,
+                viewModel = viewModel,
+                orchestratorVm = orchestratorVm,
+            )
         }
         composable(AppRoutes.TRANSFER_TYPE) {
             TransferTypeScreen(
                 onTypeSelected = { type ->
+                    orchestratorVm.setTransferType(type)
                     navController.navigate("${AppRoutes.TRANSFER_RECIPIENT}/${type.name}")
                 },
                 onBack = { navController.popBackStack() },
@@ -92,9 +101,25 @@ fun AppNavigation() {
                 .getOrDefault(TransferType.Internal)
             RecipientScreen(
                 transferType = transferType,
-                onContinue = { _, _ ->
-                    // TASK-019 will route to TRANSFER_FORM. For now navigate to
-                    // legacy transfer screen so app remains functional.
+                onContinue = { accountNumber, bank ->
+                    orchestratorVm.setRecipient(accountNumber, bank)
+                    navController.navigate(AppRoutes.TRANSFER_FORM)
+                },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(AppRoutes.TRANSFER_FORM) {
+            TransferFormScreen(
+                viewModel = orchestratorVm,
+                onNavigateToOtp = {
+                    // TASK-021 will replace with TRANSFER_OTP route. For now
+                    // route to TRANSFER_LEGACY so flow can complete via existing
+                    // POC TransferScreen + result.
+                    navController.navigate(AppRoutes.TRANSFER_LEGACY)
+                },
+                onShowOverLimitSheet = {
+                    // TASK-020 will replace with the OverNapasLimit bottom sheet.
+                    // Until then, treat over-limit as a no-op pass-through.
                     navController.navigate(AppRoutes.TRANSFER_LEGACY)
                 },
                 onBack = { navController.popBackStack() },
@@ -123,13 +148,19 @@ fun AppNavigation() {
 private fun HomeRoute(
     navController: NavHostController,
     @Suppress("UNUSED_PARAMETER") viewModel: TransferViewModel,
+    orchestratorVm: TransferOrchestratorViewModel,
 ) {
     // HomeIPayScreen is intentionally stateless w.r.t. enrollment/verification —
     // those signals stay silent until TASK-024 surfaces them in Dev Menu.
     // viewModel is kept on the route signature so TASK-023 can wire
     // `collector.startSession()` here when the user taps "Chuyển tiền trong nước".
     HomeIPayScreen(
-        onNavigateToTransfer = { navController.navigate(AppRoutes.TRANSFER_TYPE) },
+        onNavigateToTransfer = {
+            // Reset orchestrator state so each transfer flow starts fresh.
+            // (Behavioral session start lands in TASK-023.)
+            orchestratorVm.reset()
+            navController.navigate(AppRoutes.TRANSFER_TYPE)
+        },
         onNavigateToDevPreview = { navController.navigate(AppRoutes.DESIGN_SYSTEM_LEGACY) },
     )
 }
