@@ -3,11 +3,14 @@ package com.poc.behavioralfraud.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
@@ -45,11 +48,14 @@ fun IPayTopBar(
         IPayTopBarVariant.Transparent -> Color.Transparent
     }
 
+    // Status-bar inset on the BG layer (so any fill paints behind the clock too)
+    // and reapplied to the inner Row so back icon / title sit below the status bar.
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(IPayTopBarDefaults.HEIGHT)
-            .background(bg),
+            .background(bg)
+            .windowInsetsPadding(WindowInsets.statusBars)
+            .height(IPayTopBarDefaults.HEIGHT),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
