@@ -46,6 +46,7 @@ import com.poc.behavioralfraud.data.mock.MockBanks
 import com.poc.behavioralfraud.ui.components.IPayButton
 import com.poc.behavioralfraud.ui.components.IPayButtonSize
 import com.poc.behavioralfraud.ui.components.IPayButtonVariant
+import com.poc.behavioralfraud.ui.components.IPayScreenBackground
 import com.poc.behavioralfraud.ui.components.IPayTopBar
 import com.poc.behavioralfraud.ui.theme.IPayPalette
 import com.poc.behavioralfraud.ui.theme.IPayTheme
@@ -94,10 +95,9 @@ fun OtpScreen(
         }
     }
 
+    IPayScreenBackground(modifier = modifier) {
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(IPayTheme.colors.bgNeutralPrimary),
+        modifier = Modifier.fillMaxSize(),
     ) {
         IPayTopBar(title = "Xác nhận giao dịch", onBack = onBack)
 
@@ -140,6 +140,7 @@ fun OtpScreen(
             )
             Spacer(Modifier.height(IPayTheme.spacing.s16))
         }
+    }
     }
 }
 

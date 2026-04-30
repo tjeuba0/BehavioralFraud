@@ -50,6 +50,7 @@ import com.poc.behavioralfraud.data.mock.MockBanks
 import com.poc.behavioralfraud.ui.components.IPayButton
 import com.poc.behavioralfraud.ui.components.IPayButtonSize
 import com.poc.behavioralfraud.ui.components.IPayButtonVariant
+import com.poc.behavioralfraud.ui.components.IPayScreenBackground
 import com.poc.behavioralfraud.ui.components.safeClickable
 import com.poc.behavioralfraud.ui.theme.IPayPalette
 import com.poc.behavioralfraud.ui.theme.IPayTheme
@@ -86,26 +87,7 @@ fun TransferSuccessScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(IPayPalette.Ink5),
-    ) {
-        // Soft brand-light gradient backdrop on top
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(200.dp)
-                .background(
-                    brush = androidx.compose.ui.graphics.Brush.verticalGradient(
-                        colors = listOf(
-                            IPayPalette.VietinDarkBlue10,
-                            IPayPalette.Ink5,
-                        ),
-                    ),
-                ),
-        )
-
+    IPayScreenBackground(modifier = modifier) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
