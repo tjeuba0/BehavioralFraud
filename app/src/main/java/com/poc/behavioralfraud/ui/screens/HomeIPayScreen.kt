@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -103,11 +105,21 @@ fun HomeIPayScreen(
             Spacer(Modifier.height(HomeIPay.Sp.S12))
 
             HomeMassCard()
-            Spacer(Modifier.height(HomeIPay.Sp.S8))
+            Spacer(Modifier.height(HomeIPay.Sp.S12))
 
-            // TODO(commit 3): 3 charts + health score
-            // TODO(commit 4): HST (transaction history)
-            // TODO(commit 5): Banner row
+            HomeFinancialOverviewCard()
+            Spacer(Modifier.height(HomeIPay.Sp.S12))
+
+            HomeChartsCard()
+            Spacer(Modifier.height(HomeIPay.Sp.S12))
+
+            HomeHealthScoreCard()
+            Spacer(Modifier.height(HomeIPay.Sp.S24))
+
+            HomeTransactionHistorySection()
+            Spacer(Modifier.height(HomeIPay.Sp.S24))
+
+            HomeBannerRow()
 
             // Bottom spacer so floating nav doesn't overlap last content
             Spacer(Modifier.height(HomeIPay.Sp.NavSpacer))
@@ -892,6 +904,415 @@ private fun AIShortcutChip(text: String, onClick: () -> Unit) {
             modifier = Modifier.size(HomeIPay.Size.IconM),
         )
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Section: Financial Overview Card (Figma 1:15589, 343×339)
+// Placeholder card — full design context not pulled to conserve context budget.
+// Shows section heading + body text. Reasonable layout from metadata.
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun HomeFinancialOverviewCard() {
+    IPayCard(
+        variant = IPayCardVariant.Outlined,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = HomeIPay.Sp.S16),
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(HomeIPay.Sp.S12)) {
+            Text(
+                text = "Tài chính cá nhân",
+                style = IPayTheme.typography.titleLarge,
+                color = IPayTheme.colors.textNeutralPrimary,
+            )
+            Text(
+                text = "Theo dõi thu chi, đầu tư và tiết kiệm chỉ trong một nơi.",
+                style = IPayTheme.typography.bodyMedium,
+                color = IPayTheme.colors.textNeutralSecondary,
+            )
+            // Placeholder content area — Figma has additional charts/widgets here
+            // that require pulling design context for node 1:15589.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(180.dp)
+                    .clip(RoundedCornerShape(HomeIPay.Sp.S12))
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                IPayPalette.VietinDarkBlue10,
+                                IPayPalette.BrandBgLight,
+                            ),
+                        ),
+                    ),
+            )
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Section: 3-charts card (Figma 1:15590, 343×160)
+// Three 60dp circular progress charts: 52% / 22% (with alert) / 15%.
+// Charts drawn with Compose Canvas — no SVG export needed.
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun HomeChartsCard() {
+    IPayCard(
+        variant = IPayCardVariant.Outlined,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = HomeIPay.Sp.S16),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(HomeIPay.Sp.S12),
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(HomeIPay.Sp.S20)) {
+            Text(
+                text = "Kế hoạch tài chính",
+                style = IPayTheme.typography.titleLarge,
+                color = IPayTheme.colors.textNeutralPrimary,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+            ) {
+                ProgressChart(percent = 0.52f, label = "52%", showAlert = false)
+                ProgressChart(percent = 0.22f, label = "22%", showAlert = true)
+                ProgressChart(percent = 0.15f, label = "15%", showAlert = false)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProgressChart(percent: Float, label: String, showAlert: Boolean) {
+    val ringColor = IPayPalette.VietinDarkBlue60
+    val trackColor = IPayPalette.Ink20
+    val sweepDeg = (360f * percent.coerceIn(0f, 1f))
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(HomeIPay.Sp.S4),
+    ) {
+        Box(
+            modifier = Modifier.size(60.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            androidx.compose.foundation.Canvas(modifier = Modifier.size(52.dp)) {
+                val stroke = 6.dp.toPx()
+                drawArc(
+                    color = trackColor,
+                    startAngle = 0f,
+                    sweepAngle = 360f,
+                    useCenter = false,
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke),
+                )
+                drawArc(
+                    color = ringColor,
+                    startAngle = -90f,
+                    sweepAngle = sweepDeg,
+                    useCenter = false,
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(
+                        width = stroke,
+                        cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                    ),
+                )
+            }
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(HomeIPay.Sp.S4),
+        ) {
+            if (showAlert) {
+                Box(
+                    modifier = Modifier
+                        .size(HomeIPay.Size.IconS)
+                        .clip(CircleShape)
+                        .background(IPayPalette.Orange60),
+                )
+            }
+            Text(
+                text = label,
+                style = IPayTheme.typography.bodyEmphasizedSmall,
+                color = IPayTheme.colors.textNeutralPrimary,
+            )
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Section: Health Score Card (Figma 1:15623, 343×120)
+// Title + score "B - Tạm ổn (72 / 100)" + status badge "+3 điểm nữa để lên hạng".
+// Background has a decorative vector (Vector 21 visible).
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun HomeHealthScoreCard() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = HomeIPay.Sp.S16)
+            .height(120.dp)
+            .clip(RoundedCornerShape(HomeIPay.Sp.S12))
+            .border(
+                width = IPayTheme.stroke.xs,
+                color = IPayTheme.colors.borderNeutralPrimary,
+                shape = RoundedCornerShape(HomeIPay.Sp.S12),
+            )
+            .background(
+                brush = Brush.horizontalGradient(
+                    colors = listOf(
+                        IPayPalette.White,
+                        IPayPalette.VietinDarkBlue10.copy(alpha = 0.5f),
+                    ),
+                ),
+            )
+            .padding(HomeIPay.Sp.S12),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(HomeIPay.Sp.S12),
+        ) {
+            Text(
+                text = "Điểm sức khoẻ tài chính",
+                style = IPayTheme.typography.titleLarge,
+                color = IPayTheme.colors.textNeutralPrimary,
+            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(HomeIPay.Sp.S8),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(HomeIPay.Size.IconM)
+                        .clip(CircleShape)
+                        .background(IPayPalette.GreenIcon),
+                )
+                Text(
+                    text = "B - Tạm ổn (72 / 100)",
+                    style = IPayTheme.typography.titleMedium,
+                    color = IPayTheme.colors.textNeutralPrimary,
+                )
+            }
+            // Status badge — light green tint pill
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(percent = 50))
+                    .background(IPayPalette.Green10),
+            ) {
+                Text(
+                    text = "+3 điểm nữa để lên hạng",
+                    style = IPayTheme.typography.bodyEmphasizedSmall,
+                    color = IPayTheme.colors.textSuccess,
+                    modifier = Modifier.padding(horizontal = HomeIPay.Sp.S8, vertical = HomeIPay.Sp.S2),
+                )
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Section: Transaction History (Figma 1:15638 "HST", 375×508)
+// Header "Lịch sử giao dịch" + "Xem tất cả" link + list of mock transactions.
+// Each item: icon + counterparty name + transaction note + amount + date.
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun HomeTransactionHistorySection() {
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = HomeIPay.Sp.S16),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = "Lịch sử giao dịch",
+                style = IPayTheme.typography.headingExtraSmall,
+                color = IPayTheme.colors.textNeutralPrimary,
+            )
+            Text(
+                text = "Xem tất cả",
+                style = IPayTheme.typography.bodyEmphasizedMedium,
+                color = IPayTheme.colors.textBrandPrimary,
+            )
+        }
+        Spacer(Modifier.height(HomeIPay.Sp.S12))
+        IPayCard(
+            variant = IPayCardVariant.Outlined,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = HomeIPay.Sp.S16),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(HomeIPay.Sp.S0),
+        ) {
+            Column {
+                MockHomeTransactions.list.forEachIndexed { index, tx ->
+                    if (index > 0) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(IPayTheme.stroke.xs)
+                                .background(IPayTheme.colors.dividerPrimary),
+                        )
+                    }
+                    HomeTransactionRow(tx)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeTransactionRow(tx: MockHomeTransaction) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(HomeIPay.Sp.S12),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(HomeIPay.Sp.S12),
+    ) {
+        // Transaction icon — circular bg with first letter (no SVG icons exported)
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(IPayPalette.BrandBgLight),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = tx.counterparty.take(1),
+                style = IPayTheme.typography.titleMedium,
+                color = IPayTheme.colors.textBrandPrimary,
+            )
+        }
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = tx.counterparty,
+                style = IPayTheme.typography.bodyEmphasizedMedium,
+                color = IPayTheme.colors.textNeutralPrimary,
+                maxLines = 1,
+            )
+            Text(
+                text = tx.note,
+                style = IPayTheme.typography.bodySmall,
+                color = IPayTheme.colors.textNeutralTertiary,
+                maxLines = 1,
+            )
+        }
+
+        Column(horizontalAlignment = Alignment.End) {
+            val sign = if (tx.amountVnd < 0) "-" else "+"
+            val color = if (tx.amountVnd < 0) {
+                IPayTheme.colors.textNeutralPrimary
+            } else {
+                IPayTheme.colors.textSuccess
+            }
+            Text(
+                text = "$sign${"%,d".format(kotlin.math.abs(tx.amountVnd))}đ",
+                style = IPayTheme.typography.bodyEmphasizedMedium,
+                color = color,
+                maxLines = 1,
+            )
+            Text(
+                text = tx.dateLabel,
+                style = IPayTheme.typography.labelSmall,
+                color = IPayTheme.colors.textNeutralTertiary,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+private data class MockHomeTransaction(
+    val counterparty: String,
+    val note: String,
+    val amountVnd: Long,
+    val dateLabel: String,
+)
+
+private object MockHomeTransactions {
+    val list = listOf(
+        MockHomeTransaction("Nguyễn Văn An", "Chuyển tiền cafe sáng", -45_000L, "Hôm nay"),
+        MockHomeTransaction("Lương VietinBank", "Lương tháng 4", 18_500_000L, "Hôm qua"),
+        MockHomeTransaction("Grab", "Đặt xe", -68_000L, "2 ngày trước"),
+        MockHomeTransaction("Trần Thị Bình", "Trả tiền nhà", -3_500_000L, "3 ngày trước"),
+        MockHomeTransaction("Shopee", "Đơn hàng #SH123", -245_000L, "5 ngày trước"),
+    )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Section: Banner Row (Figma 1:15639, 343×120)
+// Horizontally scrollable banner cards. Figma has 2 instances; second is the
+// active variant with text "Hè này Thoải mái vi vu". Image asset not exported
+// (would need PNG). Using gradient placeholder that matches summer-vibe palette.
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun HomeBannerRow() {
+    LazyRow(
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = HomeIPay.Sp.S16),
+        horizontalArrangement = Arrangement.spacedBy(HomeIPay.Sp.S12),
+    ) {
+        items(HomeBannerData.list) { banner ->
+            HomeBannerCard(banner)
+        }
+    }
+}
+
+@Composable
+private fun HomeBannerCard(data: HomeBanner) {
+    Box(
+        modifier = Modifier
+            .width(343.dp)
+            .height(120.dp)
+            .clip(RoundedCornerShape(HomeIPay.Sp.S12))
+            .background(
+                brush = Brush.horizontalGradient(
+                    colors = listOf(data.bgStart, data.bgEnd),
+                ),
+            )
+            .padding(HomeIPay.Sp.S16),
+    ) {
+        Column {
+            Text(
+                text = data.headline,
+                style = IPayTheme.typography.titleLarge,
+                color = Color.White,
+            )
+            Spacer(Modifier.height(HomeIPay.Sp.S4))
+            Text(
+                text = data.subline,
+                style = IPayTheme.typography.bodyMedium,
+                color = Color.White.copy(alpha = 0.85f),
+            )
+        }
+    }
+}
+
+private data class HomeBanner(
+    val headline: String,
+    val subline: String,
+    val bgStart: Color,
+    val bgEnd: Color,
+)
+
+private object HomeBannerData {
+    val list = listOf(
+        HomeBanner(
+            headline = "Hè này Thoải mái vi vu",
+            subline = "Hoàn 5% chuyến bay nội địa",
+            bgStart = IPayPalette.VietinDarkBlue80,
+            bgEnd = IPayPalette.AIPurple,
+        ),
+        HomeBanner(
+            headline = "Mở thẻ tín dụng GenZ",
+            subline = "Tặng 500K + miễn phí thường niên",
+            bgStart = IPayPalette.VietinRed60,
+            bgEnd = IPayPalette.AISalmon,
+        ),
+    )
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
