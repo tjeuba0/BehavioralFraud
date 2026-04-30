@@ -98,8 +98,13 @@ fun HomeIPayScreen(
             HomeActionGridCard(onTapTransfer = onNavigateToTransfer)
             Spacer(Modifier.height(HomeIPay.Sp.S24))
 
-            // ─── Below-the-fold (added in next commits) ───────────────────
-            // TODO(commit 2): Featured section "Dành riêng cho bạn"
+            // ─── Below-the-fold ──────────────────────────────────────────
+            HomeFeaturedTitle()
+            Spacer(Modifier.height(HomeIPay.Sp.S12))
+
+            HomeMassCard()
+            Spacer(Modifier.height(HomeIPay.Sp.S8))
+
             // TODO(commit 3): 3 charts + health score
             // TODO(commit 4): HST (transaction history)
             // TODO(commit 5): Banner row
@@ -662,6 +667,234 @@ private fun ViewAllServicesPill(onClick: () -> Unit) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Section: Featured "Dành riêng cho bạn" title + Mass card (Figma 1:15585..1:15588)
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun HomeFeaturedTitle() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = HomeIPay.Sp.S16),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = "Dành riêng cho bạn",
+            style = IPayTheme.typography.headingExtraSmall,
+            color = IPayTheme.colors.textNeutralPrimary,
+        )
+        Text(
+            text = "Cài đặt",
+            style = IPayTheme.typography.bodyEmphasizedMedium,
+            color = IPayTheme.colors.textBrandPrimary,
+        )
+    }
+}
+
+/**
+ * Mass / Dành riêng cho bạn card — Figma 1:10692.
+ *
+ * Featured promo card with gradient bg, headline (gradient text), 3 chat bubbles
+ * (sender style — top-left sharp), and 2 AI shortcut chips at bottom.
+ */
+@Composable
+private fun HomeMassCard() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = HomeIPay.Sp.S16)
+            .clip(RoundedCornerShape(HomeIPay.Sp.S12))
+            .background(
+                brush = Brush.verticalGradient(
+                    colorStops = arrayOf(
+                        0f to IPayPalette.Ink10,
+                        0.30f to IPayPalette.VietinDarkBlue10,
+                        0.70f to IPayPalette.Purple10.copy(alpha = 0.5f),
+                        1f to IPayPalette.Ink10,
+                    ),
+                ),
+            )
+            .border(
+                width = IPayTheme.stroke.xs,
+                color = IPayPalette.VietinDarkBlue20,
+                shape = RoundedCornerShape(HomeIPay.Sp.S12),
+            )
+            .padding(HomeIPay.Sp.S12),
+        verticalArrangement = Arrangement.spacedBy(HomeIPay.Sp.S20),
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(HomeIPay.Sp.S16)) {
+            // Headline with gradient text — vietinDarkBlue/80 → purple → vietinRed/60
+            Text(
+                text = "Thẻ tín dụng dành riêng cho hệ GenZ chúng ta đâyyyy 🔥",
+                style = IPayTheme.typography.titleLarge.copy(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            IPayPalette.VietinDarkBlue80,
+                            IPayPalette.AILabelMiddle,
+                            IPayPalette.VietinRed60,
+                        ),
+                    ),
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            // 3 chat bubbles (sender style — sharp top-left, rounded other 3 corners)
+            Column(verticalArrangement = Arrangement.spacedBy(HomeIPay.Sp.S12)) {
+                ChatBubbleText(
+                    text = "✨ Tada! Biết bạn là dân sành ăn, mê công nghệ và máu du lịch chính hiệu rồi nha!",
+                )
+                ChatBubbleImage(description = "Thẻ Droppii")
+                ChatBubbleText(
+                    text = "Tụi mình đã có bí kíp cho bạn nè, 'Vũ khí bí mật' giúp bạn nâng tầm lifestyle, " +
+                        "thỏa sức trải nghiệm mà không lo 'đau ví'",
+                )
+            }
+        }
+
+        // AI shortcut chips
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(HomeIPay.Sp.S12),
+        ) {
+            AIShortcutChip(text = "Nhanh tay mở thẻ ngay", onClick = { /* POC no-op */ })
+            AIShortcutChip(text = "Chat với chuyên gia thẻ", onClick = { /* POC no-op */ })
+        }
+    }
+}
+
+/** Sender chat bubble — sharp top-left, rounded 24dp other corners. */
+@Composable
+private fun ChatBubbleText(text: String) {
+    Box(
+        modifier = Modifier
+            .clip(
+                RoundedCornerShape(
+                    topStart = HomeIPay.Sp.S0,
+                    topEnd = HomeIPay.Sp.S24,
+                    bottomEnd = HomeIPay.Sp.S24,
+                    bottomStart = HomeIPay.Sp.S24,
+                ),
+            )
+            .background(Color.White)
+            .padding(horizontal = HomeIPay.Sp.S12, vertical = HomeIPay.Sp.S8),
+    ) {
+        Text(
+            text = text,
+            style = IPayTheme.typography.bodyMedium,
+            color = IPayTheme.colors.textNeutralPrimary,
+        )
+    }
+}
+
+/** Image chat bubble — rounded 20dp (sharp top-left), 222×125 image + description. */
+@Composable
+private fun ChatBubbleImage(description: String) {
+    Column(
+        modifier = Modifier
+            .clip(
+                RoundedCornerShape(
+                    topStart = HomeIPay.Sp.S0,
+                    topEnd = HomeIPay.Sp.S20,
+                    bottomEnd = HomeIPay.Sp.S20,
+                    bottomStart = HomeIPay.Sp.S20,
+                ),
+            )
+            .background(Color.White)
+            .padding(HomeIPay.Sp.S4),
+        verticalArrangement = Arrangement.spacedBy(HomeIPay.Sp.S4),
+    ) {
+        // Image placeholder — Figma references "image 860" but no SVG export
+        // available; using brand-tinted Box at exact 222×125 from spec.
+        Box(
+            modifier = Modifier
+                .width(222.dp)
+                .height(125.dp)
+                .clip(
+                    RoundedCornerShape(
+                        topStart = HomeIPay.Sp.S0,
+                        topEnd = HomeIPay.Sp.S16,
+                        bottomEnd = HomeIPay.Sp.S16,
+                        bottomStart = HomeIPay.Sp.S16,
+                    ),
+                )
+                .background(
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            IPayPalette.VietinDarkBlue30,
+                            IPayPalette.AIPurple,
+                        ),
+                    ),
+                ),
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = HomeIPay.Sp.S8),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = description,
+                style = IPayTheme.typography.bodySmall,
+                color = IPayTheme.colors.textNeutralTertiary,
+                modifier = Modifier.weight(1f),
+            )
+            Icon(
+                painter = painterResource(R.drawable.ic_volume_max),
+                contentDescription = null,
+                tint = IPayTheme.colors.textNeutralTertiary,
+                modifier = Modifier.size(HomeIPay.Size.IconS),
+            )
+        }
+    }
+}
+
+/**
+ * AI shortcut chip — used in Mass card footer.
+ *
+ * White bg, brand-cyan border, gradient label (vietinDarkBlue/80 → purple → red),
+ * trailing AI sparkle icon.
+ */
+@Composable
+private fun AIShortcutChip(text: String, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .height(HomeIPay.Size.AIChipHeight)
+            .clip(RoundedCornerShape(percent = 50))
+            .background(IPayPalette.White)
+            .border(
+                width = IPayTheme.stroke.xs,
+                color = IPayPalette.AICyan,
+                shape = RoundedCornerShape(percent = 50),
+            )
+            .safeClickable(onSafeClick = onClick, role = Role.Button)
+            .padding(horizontal = HomeIPay.Sp.S16, vertical = HomeIPay.Sp.S8),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(HomeIPay.Sp.S8),
+    ) {
+        Text(
+            text = text,
+            style = IPayTheme.typography.titleSmall.copy(
+                brush = Brush.horizontalGradient(
+                    colors = listOf(
+                        IPayPalette.VietinDarkBlue80,
+                        IPayPalette.AILabelMiddle,
+                        IPayPalette.VietinRed50,
+                    ),
+                ),
+            ),
+            maxLines = 1,
+        )
+        Icon(
+            painter = painterResource(R.drawable.ic_ai_sparkle),
+            contentDescription = null,
+            tint = Color.Unspecified,
+            modifier = Modifier.size(HomeIPay.Size.IconM),
+        )
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Section: Bottom Nav (Figma 1:15650)
 // Floating dock — 2 icons (left/right) + center QR FAB (gradient) over a
 // gradient backdrop fading from white at bottom.
@@ -819,6 +1052,9 @@ private object HomeIPay {
         val BottomNavHeight: Dp = 110.dp
         val BottomNavItem: Dp = 40.dp
         val BottomNavCenter: Dp = 64.dp
+
+        // Featured / AI chip
+        val AIChipHeight: Dp = 36.dp
     }
 
     object Alpha {

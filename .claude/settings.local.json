@@ -27,7 +27,12 @@
       "Bash(jarsigner -verify -verbose \"/Users/vandz/Downloads/app-release.aab\" 2>&1 | grep -E '\\(Digest algorithm|Signature algorithm|signer|Signed by|jar verified|scheme\\)' | head -10)",
       "Bash(xargs cat:*)",
       "Bash(cp -r /Users/vandz/MaySach-Android/.claude/ /Users/vandz/BehavioralFraud/.claude/)",
-      "Bash(mkdir -p /Users/vandz/BehavioralFraud/docs)"
+      "Bash(mkdir -p /Users/vandz/BehavioralFraud/docs)",
+      "mcp__Figma_Dev_Mode__get_screenshot",
+      "mcp__Figma_Dev_Mode__get_design_context",
+      "Bash(curl -s -o ic_ai_sparkle.svg \"http://localhost:3845/assets/f9fbfefe71e35a052f3ae8d3c168815eda3f983c.svg\")",
+      "Bash(curl -s -o ic_volume_max.svg \"http://localhost:3845/assets/e3f4d21a22a45224e06494f3688bda7acae78ef4.svg\")",
+      "Bash(cp drawable-out/ic_ai_sparkle.xml drawable-out/ic_volume_max.xml /Users/vandz/BehavioralFraud/.claude/worktrees/silly-payne-5d7e6f/app/src/main/res/drawable/)"
     ]
   }
 }
