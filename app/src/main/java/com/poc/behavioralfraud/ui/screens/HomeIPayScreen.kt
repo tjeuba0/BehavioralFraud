@@ -6,6 +6,9 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -139,16 +142,185 @@ fun HomeIPayScreen(
 
 @Composable
 private fun HomeBackground() {
+    // Figma BG/premium/new (1:15541) — exact replica via stacked layers per
+    // Figma node tree:
+    //   1. Ink5 base
+    //   2. BG/mass/new — 11-stop radial (navy core → light tint), 461×870
+    //      offset left=-43, with top-overlay dark fade
+    //   3. Second radial — 5-stop center-top blue glow
+    //   4. 18 frosted blur strips (587dp tall, group opacity 20%)
+    //   5. bg_premium_main SVG (decorative composition Group 1171275885)
+    //   6. 2 stars (bg_star_2 + bg_star_4) at exact Figma positions
+    //   7. Bottom fade to Ink5
+    Box(modifier = Modifier.fillMaxSize().background(IPayPalette.Ink5)) {
+        BgMassNewLayer()
+        BgSecondRadialGlow()
+        BgFrostedStrips()
+        BgDecorativeComposition()
+        BgStarsLayer()
+        BgBottomFade()
+    }
+}
+
+@Composable
+private fun BgMassNewLayer() {
+    // Figma BG/mass/new — 461×870 floated at left=-43, top=0 with 11-stop
+    // radial gradient (matrix transform makes Figma's elliptical; Compose
+    // radial is circular — extended radius for similar reach).
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(870.dp)
+            .offset(x = (-43).dp, y = 0.dp)
+            .background(
+                brush = Brush.radialGradient(
+                    colorStops = arrayOf(
+                        0.019f to androidx.compose.ui.graphics.Color(0xFF000B1A),
+                        0.113f to androidx.compose.ui.graphics.Color(0xFF00162A),
+                        0.207f to androidx.compose.ui.graphics.Color(0xFF00213A),
+                        0.308f to androidx.compose.ui.graphics.Color(0xFF043357),
+                        0.409f to androidx.compose.ui.graphics.Color(0xFF074673),
+                        0.453f to androidx.compose.ui.graphics.Color(0xFF195483),
+                        0.498f to androidx.compose.ui.graphics.Color(0xFF2B6293),
+                        0.588f to androidx.compose.ui.graphics.Color(0xFF507DB3),
+                        0.677f to androidx.compose.ui.graphics.Color(0xFF7499D2),
+                        0.767f to androidx.compose.ui.graphics.Color(0xFF98B5F2),
+                        1f to androidx.compose.ui.graphics.Color(0x1AE6E9FF),
+                    ),
+                    center = androidx.compose.ui.geometry.Offset(420f, -40f),
+                    radius = 1300f,
+                ),
+            ),
+    ) {
+        // Top dark fade overlay (Figma "Overlay top" 458×151, 50% alpha)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(152.dp)
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            androidx.compose.ui.graphics.Color(0xFF04203C),
+                            androidx.compose.ui.graphics.Color(0x0005203A),
+                        ),
+                    ),
+                    alpha = 0.5f,
+                ),
+        )
+    }
+}
+
+@Composable
+private fun BgSecondRadialGlow() {
+    // Figma 375×813 — 5-stop radial, top-center cyan glow → light tint.
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(
-                brush = Brush.verticalGradient(
-                    // Recreate "premium/new" — light blue top, neutral grey bottom
+                brush = Brush.radialGradient(
                     colorStops = arrayOf(
-                        0f to IPayPalette.VietinDarkBlue10,      // #DEF1FF top
-                        0.30f to IPayPalette.VietinDarkBlue30,    // #76CFFF mid-light
-                        1f to IPayPalette.Ink5,                   // #F8FAFC bottom
+                        0.147f to androidx.compose.ui.graphics.Color(0x00005993),
+                        0.523f to androidx.compose.ui.graphics.Color(0x002CB7FF),
+                        0.624f to androidx.compose.ui.graphics.Color(0x8078C6FF),
+                        0.725f to androidx.compose.ui.graphics.Color(0xFFC3D6FF),
+                        1f to androidx.compose.ui.graphics.Color(0x1AE6E9FF),
+                    ),
+                    center = androidx.compose.ui.geometry.Offset(540f, 0f),
+                    radius = 800f,
+                ),
+            ),
+    )
+}
+
+@Composable
+private fun BgFrostedStrips() {
+    // Figma: 18 vertical strips at top of viewport — group opacity 20%, 587dp
+    // tall. Each strip ~21dp wide with vertical gradient (dark blue 36% → ink5
+    // 60%) and backdrop-blur 11.45px.
+    val widths = listOf(
+        20.992, 21.947, 20.038, 20.992, 20.992, 20.992, 20.038, 20.992, 20.992,
+        20.992, 20.992, 20.038, 20.992, 20.992, 20.992, 20.038, 20.992, 20.992,
+    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(587.dp)
+            .alpha(0.20f),
+    ) {
+        widths.forEach { w ->
+            Box(
+                modifier = Modifier
+                    .width(w.dp)
+                    .fillMaxHeight()
+                    .blurCompat(11.45.dp)
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                androidx.compose.ui.graphics.Color(0x5C002499),
+                                androidx.compose.ui.graphics.Color(0x99F8FAFC),
+                            ),
+                        ),
+                    ),
+            )
+        }
+    }
+}
+
+/** API 31+ blur; no-op on older — graceful degradation. */
+private fun Modifier.blurCompat(radius: androidx.compose.ui.unit.Dp): Modifier =
+    if (android.os.Build.VERSION.SDK_INT >= 31) this.blur(radius) else this
+
+@Composable
+private fun BgDecorativeComposition() {
+    // Figma Group 1171275885 — decorative SVG composition 245.907×128 at
+    // (-54.41, 137).
+    Image(
+        painter = painterResource(R.drawable.bg_premium_main),
+        contentDescription = null,
+        contentScale = ContentScale.Fit,
+        modifier = Modifier
+            .offset(x = (-54).dp, y = 137.dp)
+            .width(246.dp)
+            .height(128.dp),
+    )
+}
+
+@Composable
+private fun BgStarsLayer() {
+    // Star 2 at (10.2, 114.64), 21.845×20.632
+    Image(
+        painter = painterResource(R.drawable.bg_star_2),
+        contentDescription = null,
+        modifier = Modifier
+            .offset(x = 10.dp, y = 114.dp)
+            .width(22.dp)
+            .height(21.dp),
+    )
+    // Star 4 at (22.26, 274.83), 17.217×16.260
+    Image(
+        painter = painterResource(R.drawable.bg_star_4),
+        contentDescription = null,
+        modifier = Modifier
+            .offset(x = 22.dp, y = 275.dp)
+            .width(17.dp)
+            .height(16.dp),
+    )
+}
+
+@Composable
+private fun BgBottomFade() {
+    // Figma 386×389 at (-6, 426), gradient transparent → Ink5 (mid-stop 27.365%).
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(386.dp)
+            .offset(x = (-6).dp, y = 426.dp)
+            .background(
+                brush = Brush.verticalGradient(
+                    colorStops = arrayOf(
+                        0f to IPayPalette.Ink5.copy(alpha = 0f),
+                        0.27f to IPayPalette.Ink5,
+                        1f to IPayPalette.Ink5,
                     ),
                 ),
             ),
@@ -171,7 +343,10 @@ private fun HomeTopBar(onLongPressLogo: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        // Logo — VietinBank | iPay Mobile (long-press → Dev Menu)
+        // Logo composite — Figma 1:15546 "LogoApplication" Standard Dynamic on-color-bg
+        // Layout (96×40): top 60% Vietin full logo (red bird + wordmark),
+        // bottom 40% split: left iPay logo + right Mobile Banking text.
+        // Long-press → Dev Menu.
         Box(
             modifier = Modifier
                 .height(HomeIPay.Size.LogoHeight)
@@ -182,12 +357,43 @@ private fun HomeTopBar(onLongPressLogo: () -> Unit) {
                     role = Role.Button,
                 ),
         ) {
+            // Top zone: Vietin full logo (60% height)
             Image(
                 painter = painterResource(R.drawable.logo_vietin_full),
-                contentDescription = "VietinBank iPay Mobile",
-                modifier = Modifier.fillMaxSize(),
+                contentDescription = "VietinBank",
                 contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(HomeIPay.Size.LogoHeight * 0.60f)
+                    .align(Alignment.TopStart),
             )
+            // Bottom zone: iPay text + Mobile Banking text side by side
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(HomeIPay.Size.LogoHeight * 0.40f)
+                    .align(Alignment.BottomStart)
+                    .padding(start = HomeIPay.Size.LogoWidth * 0.07f),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Image(
+                    painter = painterResource(R.drawable.logo_ipay_text),
+                    contentDescription = "iPay",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .height(HomeIPay.Size.LogoHeight * 0.32f)
+                        .width(HomeIPay.Size.LogoWidth * 0.18f),
+                )
+                Spacer(Modifier.width(HomeIPay.Sp.S4))
+                Image(
+                    painter = painterResource(R.drawable.logo_mobile_banking),
+                    contentDescription = "Mobile Banking",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .height(HomeIPay.Size.LogoHeight * 0.30f)
+                        .width(HomeIPay.Size.LogoWidth * 0.45f),
+                )
+            }
         }
 
         Row(
@@ -307,7 +513,7 @@ private fun MembershipBadge(level: String, onClick: () -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(HomeIPay.Sp.S4),
     ) {
         Icon(
-            painter = painterResource(R.drawable.ic_membership_crown),
+            painter = painterResource(R.drawable.ic_membership_diamond),
             contentDescription = null,
             tint = Color.Unspecified,
             modifier = Modifier.size(HomeIPay.Size.IconXS),
