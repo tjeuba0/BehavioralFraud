@@ -18,9 +18,11 @@ import com.poc.behavioralfraud.ui.screens.ProfileScreen
 import com.poc.behavioralfraud.ui.screens.TransferScreen
 import com.poc.behavioralfraud.ui.screens.TransferViewModel
 import com.poc.behavioralfraud.ui.screens.login.LoginScreen
+import com.poc.behavioralfraud.ui.screens.transfer.OtpScreen
 import com.poc.behavioralfraud.ui.screens.transfer.RecipientScreen
 import com.poc.behavioralfraud.ui.screens.transfer.TransferFormScreen
 import com.poc.behavioralfraud.ui.screens.transfer.TransferOrchestratorViewModel
+import com.poc.behavioralfraud.ui.screens.transfer.TransferSuccessScreen
 import com.poc.behavioralfraud.ui.screens.transfer.TransferType
 import com.poc.behavioralfraud.ui.theme.BehavioralFraudTheme
 
@@ -103,16 +105,40 @@ fun AppNavigation() {
         composable(AppRoutes.TRANSFER_FORM) {
             TransferFormScreen(
                 viewModel = orchestratorVm,
-                onNavigateToOtp = {
-                    // TASK-021 will replace with TRANSFER_OTP route. For now
-                    // route to TRANSFER_LEGACY so flow can complete.
-                    navController.navigate(AppRoutes.TRANSFER_LEGACY)
-                },
+                onNavigateToOtp = { navController.navigate(AppRoutes.TRANSFER_OTP) },
                 onSheetShown = { viewModel.collector.onOverLimitSheetShown() },
                 onSheetDecision = { decision ->
                     viewModel.collector.onOverLimitDecision(decision)
                 },
                 onBack = { navController.popBackStack() },
+            )
+        }
+        composable(AppRoutes.TRANSFER_OTP) {
+            OtpScreen(
+                viewModel = orchestratorVm,
+                onNavigateToSuccess = {
+                    navController.navigate(AppRoutes.TRANSFER_SUCCESS) {
+                        // Clear transfer flow back stack so back from Success exits to Home
+                        popUpTo(AppRoutes.HOME)
+                    }
+                },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(AppRoutes.TRANSFER_SUCCESS) {
+            TransferSuccessScreen(
+                viewModel = orchestratorVm,
+                onNavigateHome = {
+                    navController.navigate(AppRoutes.HOME) {
+                        popUpTo(AppRoutes.HOME) { inclusive = true }
+                    }
+                },
+                onNavigateNewTransfer = {
+                    orchestratorVm.reset()
+                    navController.navigate(AppRoutes.TRANSFER_RECIPIENT) {
+                        popUpTo(AppRoutes.HOME)
+                    }
+                },
             )
         }
         composable(AppRoutes.TRANSFER_LEGACY) {
