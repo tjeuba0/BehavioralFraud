@@ -185,7 +185,12 @@ data class BehavioralFeatures(
     // FR-CL-10 REQ-13 — hesitation when user encounters Napas over-limit warning.
     // Time (ms) from over-limit dialog show to user decision (proceed/cancel).
     // 0 if dialog was never shown in the session.
-    val decisionTimeOverLimitMs: Long = 0L
+    val decisionTimeOverLimitMs: Long = 0L,
+
+    // FR-CL-10 REQ-14 — paste detection on OTP entry. False in current iPay
+    // implementation because Figma uses DISPLAYED Soft OTP (not user-entered).
+    // Field reserved for future SMS-OTP flow where user pastes from messages.
+    val otpPasted: Boolean = false
 )
 
 /**
