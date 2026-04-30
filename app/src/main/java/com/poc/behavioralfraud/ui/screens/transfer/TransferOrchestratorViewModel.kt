@@ -142,6 +142,15 @@ data class TransferState(
     val riskResult: TransferRiskResult? = null,
 )
 
+/**
+ * Transfer channel determined by recipient bank: VietinBank → Internal,
+ * other Napas members → Napas. Set via [TransferOrchestratorViewModel.setTransferType]
+ * once user picks bank in RecipientScreen.
+ *
+ * No "TransferType selection screen" exists in Figma — this is a derived value.
+ */
+enum class TransferType { Internal, Napas }
+
 enum class TransferSource(val label: String, val maskedAccount: String) {
     PaymentAccount("Tài khoản thanh toán", "9999 1111"),
     Savings("Tài khoản tiết kiệm", "8888 2222"),
