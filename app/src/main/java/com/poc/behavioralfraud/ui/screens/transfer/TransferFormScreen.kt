@@ -52,6 +52,7 @@ import com.poc.behavioralfraud.data.mock.MockBanks
 import com.poc.behavioralfraud.ui.components.IPayButton
 import com.poc.behavioralfraud.ui.components.IPayButtonSize
 import com.poc.behavioralfraud.ui.components.IPayButtonVariant
+import com.poc.behavioralfraud.ui.components.IPayScreenBackground
 import com.poc.behavioralfraud.ui.components.IPayToggle
 import com.poc.behavioralfraud.ui.components.IPayTopBar
 import com.poc.behavioralfraud.ui.components.safeClickable
@@ -109,10 +110,9 @@ fun TransferFormScreen(
         }
     }
 
+    IPayScreenBackground(modifier = modifier) {
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(IPayTheme.colors.bgNeutralPrimary),
+        modifier = Modifier.fillMaxSize(),
     ) {
         IPayTopBar(title = "Khởi tạo giao dịch", onBack = onBack)
 
@@ -184,6 +184,7 @@ fun TransferFormScreen(
                 )
             }
         }
+    }
     }
 
     if (showOverLimitSheet) {

@@ -43,6 +43,7 @@ import com.poc.behavioralfraud.R
 import com.poc.behavioralfraud.data.mock.MockBank
 import com.poc.behavioralfraud.data.mock.MockBanks
 import com.poc.behavioralfraud.ui.components.IPayHorizontalTabs
+import com.poc.behavioralfraud.ui.components.IPayScreenBackground
 import com.poc.behavioralfraud.ui.components.IPayTopBar
 import com.poc.behavioralfraud.ui.components.safeClickable
 import com.poc.behavioralfraud.ui.theme.IPayPalette
@@ -80,10 +81,9 @@ fun RecipientScreen(
 
     val canContinue = accountNumber.length >= ACCOUNT_NUMBER_MIN_LENGTH && selectedBank != null
 
+    IPayScreenBackground(modifier = modifier) {
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(IPayTheme.colors.bgNeutralPrimary),
+        modifier = Modifier.fillMaxSize(),
     ) {
         IPayTopBar(
             title = "Thông tin người nhận",
@@ -165,6 +165,7 @@ fun RecipientScreen(
                 modifier = Modifier.fillMaxWidth(),
             )
         }
+    }
     }
 }
 
