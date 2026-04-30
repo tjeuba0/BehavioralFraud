@@ -37,7 +37,12 @@
       "Bash(curl -s -o ic_finance_chip.svg \"http://localhost:3845/assets/73aecdd69327382caa9b206922892b18632e6d6d.svg\")",
       "Bash(curl -s -o ic_polygon_down.svg \"http://localhost:3845/assets/af91d1d2a6fadf247a1043b54f4c38dc1d869fd3.svg\")",
       "Bash(curl -s -o ic_finance_chi.svg \"http://localhost:3845/assets/8d1d3320c2c77f2fda70f24bc2660284c1d03206.svg\")",
-      "Bash(curl -s -o ic_finance_thu.svg \"http://localhost:3845/assets/c8f107d0d56da2588ba727bd136ca663b8c5eebe.svg\")"
+      "Bash(curl -s -o ic_finance_thu.svg \"http://localhost:3845/assets/c8f107d0d56da2588ba727bd136ca663b8c5eebe.svg\")",
+      "Bash(curl -s -o ic_close_eye.svg \"http://localhost:3845/assets/ab342e7e8d54a2a45e32fdcdc45499279e30d00d.svg\")",
+      "Bash(curl -s -o ic_insurance.svg \"http://localhost:3845/assets/9680d8d9fc244f839da1a237d4af216f3da4c4a3.svg\")",
+      "Bash(curl -s -o ic_dot.svg \"http://localhost:3845/assets/9a6af525a277817b31d2f3ccb7f71183f2fa88cb.svg\")",
+      "Bash(curl -s -o ic_chip_default.svg \"http://localhost:3845/assets/e6f4d7c005504973de8423984547346b85542c55.svg\")",
+      "Bash(cp drawable-out/ic_close_eye.xml drawable-out/ic_insurance.xml drawable-out/ic_dot.xml drawable-out/ic_chip_default.xml /Users/vandz/BehavioralFraud/.claude/worktrees/silly-payne-5d7e6f/app/src/main/res/drawable/)"
     ]
   }
 }

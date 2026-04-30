@@ -80,6 +80,12 @@ class BehavioralCollector(private val context: Context) : DefaultLifecycleObserv
     private var screenshotDetected = false
     private var screenshotObserver: ContentObserver? = null
 
+    // FR-CL-10 REQ-13 — Over-Napas-limit decision time tracking (hesitation signal).
+    @Volatile
+    private var overLimitSheetShownAt: Long = 0L
+    @Volatile
+    private var decisionTimeOverLimitMs: Long = 0L
+
     // Sensor listener
     private val sensorListener = object : SensorEventListener {
         override fun onSensorChanged(event: android.hardware.SensorEvent) {
@@ -136,6 +142,8 @@ class BehavioralCollector(private val context: Context) : DefaultLifecycleObserv
         bgSwitchCount = 0; totalBgTimeMs = 0L; backgroundPauseTime = 0L
         multiTouchEventCount = 0; maxPointerCountObserved = 0
         screenshotDetected = false
+        overLimitSheetShownAt = 0L
+        decisionTimeOverLimitMs = 0L
 
         sessionId = UUID.randomUUID().toString().take(8)
         sessionStartTime = System.currentTimeMillis()
@@ -271,6 +279,37 @@ class BehavioralCollector(private val context: Context) : DefaultLifecycleObserv
         )
     }
 
+    /** FR-CL-10 REQ-13 — record timestamp when over-Napas-limit dialog shown. */
+    fun onOverLimitSheetShown() {
+        if (!isCollecting) return
+        if (overLimitSheetShownAt > 0L) return  // idempotent
+        overLimitSheetShownAt = System.currentTimeMillis()
+        navigationEvents.add(
+            NavigationEvent(
+                timestamp = overLimitSheetShownAt,
+                eventType = "over_limit_sheet_shown",
+                detail = "napas",
+            )
+        )
+    }
+
+    /** FR-CL-10 REQ-13 — record decision time = now - shown timestamp. */
+    fun onOverLimitDecision(decision: String) {
+        if (!isCollecting) return
+        val shown = overLimitSheetShownAt
+        if (shown <= 0L) return
+        if (decisionTimeOverLimitMs > 0L) return  // first decision wins
+        val now = System.currentTimeMillis()
+        decisionTimeOverLimitMs = (now - shown).coerceAtLeast(0L)
+        navigationEvents.add(
+            NavigationEvent(
+                timestamp = now,
+                eventType = "over_limit_sheet_decision",
+                detail = decision,
+            )
+        )
+    }
+
     fun getSession(transaction: TransactionInfo): BehavioralSession {
         return BehavioralSession(
             sessionId = sessionId,
@@ -393,7 +432,9 @@ class BehavioralCollector(private val context: Context) : DefaultLifecycleObserv
             idleAccelJitter = motionAdv.idleAccelJitter,
             correctionSameCount = cognitiveAdv.correctionSameCount,
             correctionDifferentCount = cognitiveAdv.correctionDifferentCount,
-            screenshotDuringInput = screenshotDetected
+            screenshotDuringInput = screenshotDetected,
+            // FR-CL-10 REQ-13
+            decisionTimeOverLimitMs = decisionTimeOverLimitMs,
         )
     }
 

@@ -180,7 +180,12 @@ data class BehavioralFeatures(
     val idleAccelJitter: Double = 0.0,
     val correctionSameCount: Int = 0,
     val correctionDifferentCount: Int = 0,
-    val screenshotDuringInput: Boolean = false
+    val screenshotDuringInput: Boolean = false,
+
+    // FR-CL-10 REQ-13 — hesitation when user encounters Napas over-limit warning.
+    // Time (ms) from over-limit dialog show to user decision (proceed/cancel).
+    // 0 if dialog was never shown in the session.
+    val decisionTimeOverLimitMs: Long = 0L
 )
 
 /**

@@ -105,14 +105,12 @@ fun AppNavigation() {
                 viewModel = orchestratorVm,
                 onNavigateToOtp = {
                     // TASK-021 will replace with TRANSFER_OTP route. For now
-                    // route to TRANSFER_LEGACY so flow can complete via existing
-                    // POC TransferScreen + result.
+                    // route to TRANSFER_LEGACY so flow can complete.
                     navController.navigate(AppRoutes.TRANSFER_LEGACY)
                 },
-                onShowOverLimitSheet = {
-                    // TASK-020 will replace with the OverNapasLimit bottom sheet.
-                    // Until then, treat over-limit as a no-op pass-through.
-                    navController.navigate(AppRoutes.TRANSFER_LEGACY)
+                onSheetShown = { viewModel.collector.onOverLimitSheetShown() },
+                onSheetDecision = { decision ->
+                    viewModel.collector.onOverLimitDecision(decision)
                 },
                 onBack = { navController.popBackStack() },
             )
