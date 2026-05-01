@@ -192,6 +192,11 @@ data class BehavioralFeatures(
     // Field reserved for future SMS-OTP flow where user pastes from messages.
     val otpPasted: Boolean = false,
 
+    // FR-CL-11 REQ-01 — GPS spoofing detection. True if last-known location
+    // from any provider has `isFromMockProvider=true`. Returns false if
+    // ACCESS_COARSE_LOCATION not granted — signal silently disabled.
+    val mockLocationDetected: Boolean = false,
+
     // FR-CL-12 — Extended sensor coverage (12 features across 5 new sensors).
     // All zero-defaults so backend payload stays backward-compat.
     // Magnetometer (REQ-01..04) — environmental fingerprint
