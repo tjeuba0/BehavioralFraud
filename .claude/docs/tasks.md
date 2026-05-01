@@ -343,6 +343,9 @@ ProfileMetric("Gyro stability", String.format("%.6f", avgGyro), "Trung bình 3 t
 | TASK-023 | Silent behavioral pipeline (session lifecycle in VM + silent verification + history persist) | FR-CL-10 (REQ-10..12, 15) | P0 | planned | TASK-016..022 |
 | TASK-024 | Dev Menu (DevMenu/Profile/RiskHistory/Session/ManualOverride) | FR-CL-10 (REQ-16..20) | P0 | planned | TASK-023 |
 | TASK-025 | E2E manual smoke + Figma visual diff + production-feel audit | FR-CL-08, 09, 10 acceptance | P1 | planned | TASK-024 |
+| TASK-026 | mockLocationDetected — GPS spoofing fraud signal | FR-CL-11 (REQ-01) | P1 | planned | none |
+| TASK-027 | Extended sensor coverage (magnetometer + light + proximity + linear-accel + rotation-vector) | FR-CL-12 (REQ-01..12) | P1 | planned | none |
+| TASK-028 | Touch micro-biometrics (tap precision + inter-tap velocity + hand dominance + tap jitter) | FR-CL-13 (REQ-01..06) | P1 | planned | none |
 
 ---
 
@@ -679,3 +682,145 @@ Component code:                    Box(Modifier.background(IPayTheme.colors.bran
 - [ ] Behavioral payload gửi backend chứa đầy đủ field mới (decisionTimeOverLimitMs, otpPasted)
 - [ ] Test scenario fraud: Tester A enroll 3 lần silent → Tester B chuyển 1 lần → Dev Menu > Risk History thấy score Tester B cao hơn baseline rõ rệt
 - [ ] Backend Pydantic backward-compat: client cũ thiếu field mới không 422
+
+---
+
+### TASK-026: mockLocationDetected — GPS spoofing fraud signal
+
+- **SRS section:** FR-CL-11 REQ-01
+- **Branch:** `feat/task-026-mock-location`
+- **Dependencies:** none
+- **Status:** planned
+
+**Goal:** Detect fake-GPS / fraud-farm spoofing qua `Location.isFromMockProvider()` flag trên last-known location của GPS + NETWORK provider.
+
+**Files thay đổi:**
+
+- MODIFY: `app/src/main/AndroidManifest.xml` — add `<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />`
+- MODIFY: `app/src/main/java/com/poc/behavioralfraud/data/collector/BehavioralCollector.kt` — add private helper `isMockLocationActive()` + wire trong `extractFeatures()`
+- MODIFY: `app/src/main/java/com/poc/behavioralfraud/data/model/BehavioralModels.kt` — add `mockLocationDetected: Boolean = false` field
+
+**Implementation note:**
+
+```kotlin
+private fun isMockLocationActive(): Boolean {
+    val granted = ContextCompat.checkSelfPermission(
+        context, Manifest.permission.ACCESS_COARSE_LOCATION,
+    ) == PackageManager.PERMISSION_GRANTED
+    if (!granted) return false
+    val lm = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
+        ?: return false
+    return try {
+        sequenceOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
+            .mapNotNull { provider -> lm.getLastKnownLocation(provider) }
+            .any { it.isFromMockProvider }
+    } catch (_: SecurityException) { false }
+}
+```
+
+**Constraints:**
+
+- Read-only — KHÔNG `requestLocationUpdates()`. Zero battery impact.
+- Graceful degrade nếu permission không grant → return `false`. Không crash, không bother user.
+- KHÔNG runtime permission prompt UI trong scope POC. Van/tester có thể bật qua Settings > App permissions.
+
+**Done when:**
+
+- [ ] Manifest có entry `ACCESS_COARSE_LOCATION`
+- [ ] `mockLocationDetected: Boolean` field xuất hiện trong `BehavioralFeatures`
+- [ ] `extractFeatures()` populate field qua helper
+- [ ] Build green, lint clean
+- [ ] Optional manual test: cài fake-GPS app + grant permission → `mockLocationDetected = true` trong Dev Menu Session Inspector
+
+---
+
+### TASK-027: Extended sensor coverage
+
+- **SRS section:** FR-CL-12 REQ-01..12
+- **Branch:** `feat/task-027-extended-sensors`
+- **Dependencies:** none
+- **Status:** planned
+
+**Goal:** Mở rộng sensor coverage từ 2 (accel + gyro) lên 7 sensor để khai thác hết hardware behavioral signal có trên smartphone. Output 12 features mới.
+
+**Files thay đổi:**
+
+- MODIFY: `app/src/main/java/com/poc/behavioralfraud/data/model/BehavioralModels.kt`
+  - Extend `SensorEvent.type` documentation với 5 type mới: `"magnetometer"`, `"light"`, `"proximity"`, `"linear_acceleration"`, `"rotation_vector"`
+  - Add 12 fields vào `BehavioralFeatures`: `magnetometerStabilityX/Y/Z`, `magnetometerMagnitudeAvg`, `lightAvgLux`, `lightStdDevLux`, `proximityNearRatio`, `linearAccelStabilityX/Y/Z`, `rotationVectorPitchStdDev`, `rotationVectorRollStdDev`
+- MODIFY: `app/src/main/java/com/poc/behavioralfraud/data/collector/BehavioralCollector.kt`
+  - `startSession()`: register 5 sensor mới qua `sensorManager.registerListener()` cùng accel/gyro existing
+  - `sensorListener.onSensorChanged()`: extend switch-case route theo `event.sensor.type` cho 5 type mới. Map quaternion → pitch/roll qua `SensorManager.getOrientation(rotMatrix, orientationOut)`
+  - Wire 12 features mới trong `extractFeatures()`
+- MODIFY: `app/src/main/java/com/poc/behavioralfraud/data/scorer/FeatureComputation.kt` — thêm computation helpers cho magnetometer magnitude + proximity ratio + rotation vector orientation
+
+**Implementation note:**
+
+- Sensor delays: light + proximity dùng `SENSOR_DELAY_NORMAL` (~5 Hz đủ). Magnetometer + linear-accel + rotation-vector dùng `SENSOR_DELAY_GAME` (~50 Hz) consistent với accel/gyro.
+- Listener single — 1 SensorEventListener route 7 sensor type. Existing `sensorManager.unregisterListener(sensorListener)` đã cover all.
+- Rotation vector pitch/roll: dùng `SensorManager.getRotationMatrixFromVector()` + `SensorManager.getOrientation()` — output [azimuth, pitch, roll] in radians.
+- Memory budget: 50 Hz × 60s × 5 sensors × 4 bytes × 3 axes = ~180 KB/session. Acceptable.
+
+**Constraints:**
+
+- KHÔNG cần permission gì — sensors free trên Android.
+- Backward compat: nếu device không có sensor (vd no proximity) thì `getDefaultSensor()` return null → skip register (existing pattern dùng `?.let`).
+
+**Done when:**
+
+- [ ] 12 fields mới trong `BehavioralFeatures` data class
+- [ ] 5 sensors mới registered trong `startSession()`
+- [ ] `extractFeatures()` populate đủ 12 features
+- [ ] Build green
+- [ ] Manual test: chạy app trên device thật → Session Inspector hiển thị giá trị plausible (lightAvgLux > 0 indoor, magnetometer non-zero, etc)
+
+---
+
+### TASK-028: Touch micro-biometrics
+
+- **SRS section:** FR-CL-13 REQ-01..06
+- **Branch:** `feat/task-028-touch-microbiometrics`
+- **Dependencies:** none (pure extractor — không touch collector / sensor)
+- **Status:** planned
+
+**Goal:** Khai thác thêm signal từ raw `TouchEvent` đã có. Output 6 features: tap precision (2), inter-tap velocity (2), hand dominance (1), tap jitter (1).
+
+**Files thay đổi:**
+
+- MODIFY: `app/src/main/java/com/poc/behavioralfraud/data/model/BehavioralModels.kt` — add 6 fields vào `BehavioralFeatures`: `avgTapPrecisionOffsetPx`, `tapPrecisionStdDev`, `avgInterTapVelocityPxPerMs`, `interTapVelocityStdDev`, `dominantHandSide`, `tapJitterPostDownMs`
+- MODIFY: `app/src/main/java/com/poc/behavioralfraud/data/scorer/FeatureComputation.kt` — add `computeTouchMicroBiometrics(touchEvents, displayMetrics)` helper
+- MODIFY: `app/src/main/java/com/poc/behavioralfraud/data/collector/BehavioralCollector.kt` — wire trong `extractFeatures()` (tương tự pattern `motionAdv`, `cognitiveAdv`)
+
+**Implementation note (per REQ):**
+
+- **REQ-01/02 (tap precision):** option B (approximate) — không cần Compose layout hook. Pseudo:
+  ```
+  for each ACTION_DOWN at (x, y):
+    cell_size_px = 50.dp.toPx()
+    nearest_center_x = round(x / cell_size_px) * cell_size_px + cell_size_px / 2
+    nearest_center_y = round(y / cell_size_px) * cell_size_px + cell_size_px / 2
+    offset = sqrt((x - nearest_center_x)^2 + (y - nearest_center_y)^2)
+  avg + std dev qua all DOWN events
+  ```
+- **REQ-03/04 (inter-tap velocity):** giữa 2 ACTION_DOWN liên tiếp (sort by timestamp): `velocity = sqrt(dx² + dy²) / dt` (px/ms). Avg + std dev.
+- **REQ-05 (hand dominance):** dùng `touchCentroidX` (đã có FR-CL-05 REQ-06). Compute ratio = centroid / screenWidth. Threshold:
+  - ratio > 0.55 → `"RIGHT"` (right thumb dominant)
+  - ratio < 0.45 → `"LEFT"`
+  - else → `"AMBIGUOUS"`
+- **REQ-06 (tap jitter):** với mỗi ACTION_DOWN, scan forward tìm ACTION_MOVE đầu tiên có cùng pointer (approximate via timestamp gap < 500ms + same x±20px). Compute `Δt = MOVE_timestamp - DOWN_timestamp`. Avg qua tất cả DOWN có MOVE follow-up. 0 nếu không có.
+
+**Constraints:**
+
+- KHÔNG touch `BehavioralCollector` — pure extractor logic.
+- KHÔNG cần permission, không cần sensor mới.
+- Grid cell size hard-code 50dp constant trong `FeatureComputation.kt`.
+- Backward compat: nếu `touchEvents` empty → return all zeros (gracefully).
+
+**Done when:**
+
+- [ ] 6 fields mới trong `BehavioralFeatures`
+- [ ] `computeTouchMicroBiometrics()` helper trong `FeatureComputation.kt`
+- [ ] `extractFeatures()` wire 6 features
+- [ ] Build green
+- [ ] Manual test: chạy 1 transfer → Session Inspector cho thấy 6 features có giá trị plausible (avgTapPrecisionOffsetPx > 0, dominantHandSide ∈ {LEFT, RIGHT, AMBIGUOUS})
+
