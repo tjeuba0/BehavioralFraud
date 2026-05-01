@@ -101,7 +101,15 @@ class TransferViewModelTest {
         deletionRatio = 0.07,
         fieldFocusSequence = "accountNumber->amount->note",
         timeToFirstInput = 2500L,
-        timeFromLastInputToConfirm = 1800L
+        timeFromLastInputToConfirm = 1800L,
+        // FR-CL-10/11/12/13 — set to non-anomalous values so TASK-030 LocalScoreRules
+        // does not fire deterministic-rule scores on this sample data (these tests
+        // are about Z-score logic against enrollment baseline, not rule engine).
+        sessionHourOfDay = 14,           // afternoon, not [0..5] dark window
+        lightAvgLux = 300.0,             // lit
+        avgTapPrecisionOffsetPx = 10.0,  // > 2px threshold
+        tapPrecisionStdDev = 5.0,        // > 1px threshold
+        interTapVelocityStdDev = 0.5,    // > 0.005 threshold
     )
 
     private val sampleProfile = BehavioralProfile(
