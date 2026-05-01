@@ -415,6 +415,14 @@ class BehavioralCollector(private val context: Context) : DefaultLifecycleObserv
         // === FR-CL-12: Extended sensor coverage (5 new sensors, 12 features) ===
         val extSensors = computeExtendedSensorFeatures(sensorSnapshot)
 
+        // === FR-CL-13: Touch micro-biometrics (6 features, pure extractor) ===
+        val touchMicro = computeTouchMicroBiometrics(
+            touchEvents = touchSnapshot,
+            density = context.resources.displayMetrics.density,
+            touchCentroidX = touchEnh.touchCentroidX,
+            screenWidthPx = screenWidthValue,
+        )
+
         return BehavioralFeatures(
             sessionDurationMs = endTime - sessionStartTime,
             avgInterCharDelayMs = base.avgInterChar,
@@ -512,6 +520,13 @@ class BehavioralCollector(private val context: Context) : DefaultLifecycleObserv
             linearAccelStabilityZ = extSensors.linearAccelStabilityZ,
             rotationVectorPitchStdDev = extSensors.rotationVectorPitchStdDev,
             rotationVectorRollStdDev = extSensors.rotationVectorRollStdDev,
+            // FR-CL-13 — Touch micro-biometrics
+            avgTapPrecisionOffsetPx = touchMicro.avgTapPrecisionOffsetPx,
+            tapPrecisionStdDev = touchMicro.tapPrecisionStdDev,
+            avgInterTapVelocityPxPerMs = touchMicro.avgInterTapVelocityPxPerMs,
+            interTapVelocityStdDev = touchMicro.interTapVelocityStdDev,
+            dominantHandSide = touchMicro.dominantHandSide,
+            tapJitterPostDownMs = touchMicro.tapJitterPostDownMs,
         )
     }
 

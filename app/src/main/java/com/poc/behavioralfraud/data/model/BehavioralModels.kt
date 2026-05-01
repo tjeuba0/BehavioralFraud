@@ -216,6 +216,16 @@ data class BehavioralFeatures(
     // Rotation vector (REQ-11..12) — quaternion-derived orientation jitter
     val rotationVectorPitchStdDev: Double = 0.0,
     val rotationVectorRollStdDev: Double = 0.0,
+
+    // FR-CL-13 — Touch micro-biometrics (6 features, pure extractor — no new
+    // collector / sensor / permission). All zero-defaults for backend
+    // backward-compat.
+    val avgTapPrecisionOffsetPx: Double = 0.0,
+    val tapPrecisionStdDev: Double = 0.0,
+    val avgInterTapVelocityPxPerMs: Double = 0.0,
+    val interTapVelocityStdDev: Double = 0.0,
+    val dominantHandSide: String = "AMBIGUOUS",
+    val tapJitterPostDownMs: Double = 0.0,
 )
 
 /**

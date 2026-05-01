@@ -344,8 +344,8 @@ ProfileMetric("Gyro stability", String.format("%.6f", avgGyro), "Trung bình 3 t
 | TASK-024 | Dev Menu (DevMenu/Profile/RiskHistory/Session/ManualOverride) | FR-CL-10 (REQ-16..20) | P0 | planned | TASK-023 |
 | TASK-025 | E2E manual smoke + Figma visual diff + production-feel audit | FR-CL-08, 09, 10 acceptance | P1 | planned | TASK-024 |
 | TASK-026 | mockLocationDetected — GPS spoofing fraud signal | FR-CL-11 (REQ-01) | P1 | done | none |
-| TASK-027 | Extended sensor coverage (magnetometer + light + proximity + linear-accel + rotation-vector) | FR-CL-12 (REQ-01..12) | P1 | review | none |
-| TASK-028 | Touch micro-biometrics (tap precision + inter-tap velocity + hand dominance + tap jitter) | FR-CL-13 (REQ-01..06) | P1 | planned | none |
+| TASK-027 | Extended sensor coverage (magnetometer + light + proximity + linear-accel + rotation-vector) | FR-CL-12 (REQ-01..12) | P1 | done | none |
+| TASK-028 | Touch micro-biometrics (tap precision + inter-tap velocity + hand dominance + tap jitter) | FR-CL-13 (REQ-01..06) | P1 | review | none |
 
 ---
 
