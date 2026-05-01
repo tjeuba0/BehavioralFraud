@@ -1,17 +1,21 @@
 package com.poc.behavioralfraud.data.collector
 
+import android.Manifest
 import android.content.Context
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
 import android.database.ContentObserver
 import android.hardware.Sensor
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.location.LocationManager
 import android.media.AudioManager
 import android.os.BatteryManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import com.poc.behavioralfraud.data.model.*
@@ -435,6 +439,8 @@ class BehavioralCollector(private val context: Context) : DefaultLifecycleObserv
             screenshotDuringInput = screenshotDetected,
             // FR-CL-10 REQ-13
             decisionTimeOverLimitMs = decisionTimeOverLimitMs,
+            // Threat indicator — GPS spoofing
+            mockLocationDetected = isMockLocationActive(),
         )
     }
 
@@ -451,6 +457,38 @@ class BehavioralCollector(private val context: Context) : DefaultLifecycleObserv
             if (!callActiveAtStart) {
                 callStartedFlag = true
             }
+        }
+    }
+
+    /**
+     * Detect GPS spoofing — checks `Location.isFromMockProvider()` on the most
+     * recent location samples from GPS + NETWORK providers.
+     *
+     * Returns:
+     * - `true` only if at least one provider reports a location with the mock
+     *   flag set. Strong signal: a fraud farm or scammer using a fake-GPS app
+     *   to make the device appear in a different city/country.
+     * - `false` if no mock detected, or if location permission was not granted
+     *   (collector degrades gracefully — no signal collected, but session still
+     *   captures everything else).
+     *
+     * Read-only: NEVER requests location updates, just reads last-known cache
+     * which the OS already maintains. Zero battery impact.
+     */
+    private fun isMockLocationActive(): Boolean {
+        val granted = ContextCompat.checkSelfPermission(
+            context, Manifest.permission.ACCESS_COARSE_LOCATION,
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!granted) return false
+
+        val lm = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
+            ?: return false
+        return try {
+            sequenceOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
+                .mapNotNull { provider -> lm.getLastKnownLocation(provider) }
+                .any { it.isFromMockProvider }
+        } catch (_: SecurityException) {
+            false
         }
     }
 

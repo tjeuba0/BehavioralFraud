@@ -190,7 +190,13 @@ data class BehavioralFeatures(
     // FR-CL-10 REQ-14 — paste detection on OTP entry. False in current iPay
     // implementation because Figma uses DISPLAYED Soft OTP (not user-entered).
     // Field reserved for future SMS-OTP flow where user pastes from messages.
-    val otpPasted: Boolean = false
+    val otpPasted: Boolean = false,
+
+    // Threat indicator — GPS spoofing detection. True if last-known location
+    // from any provider has `isFromMockProvider=true` (fraud farm / fake-GPS
+    // app installed). Returns false if ACCESS_COARSE_LOCATION not granted —
+    // signal silently disabled rather than failing.
+    val mockLocationDetected: Boolean = false,
 )
 
 /**
