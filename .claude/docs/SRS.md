@@ -629,3 +629,94 @@ Output of on-device feature extraction, sent to backend as JSON. Backend needs c
 - [ ] Dev Menu > Manual Override > Reset profile → xoá profile + baseline, lần giao dịch tiếp theo build lại baseline
 - [ ] LocalScorer fallback hoạt động khi backend down (giống FR-CL-02)
 - [ ] Rotation device trên mọi màn input → không duplicate navigation, không mất dữ liệu form
+---
+
+### FR-CL-11: Threat Indicator Signals — Mobile Anti-Fraud
+
+**Description:** Bổ sung threat-indicator signal trực tiếp từ Android system cho fraud detection. Hiện tại Zimperium SDK upstream đã cover accessibility services + USB debugging + screen overlay → KHÔNG duplicate ở đây. Section này chỉ thêm các signal Zimperium chưa có hoặc orthogonal.
+
+**Scope:** 1 feature mới trong `BehavioralFeatures`. Read-only — không request location updates, chỉ đọc OS-cached state.
+
+**New features — extend BehavioralFeatures:**
+
+| REQ-ID | Field | Type | Default | Description |
+|--------|-------|------|---------|-------------|
+| REQ-01 | `mockLocationDetected` | boolean | `false` | True nếu `Location.isFromMockProvider()` flag được set trên last-known location của ít nhất 1 trong 2 provider (GPS, NETWORK). Detect fraud farm / fake-GPS app spoofing vị trí (vd hiển thị "đang ở VN" trong khi remote). Read-only — đọc OS cache, KHÔNG request location updates. Permission `ACCESS_COARSE_LOCATION` cần được declare trong manifest; nếu user chưa grant → silently return `false` (graceful degrade — feature disabled, không crash, mọi feature khác vẫn collect). |
+
+**Permission impact:**
+
+- NEW manifest entry: `<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />`
+- Runtime grant prompt: KHÔNG cần xin trong POC — collector tự handle ungranted state. Để bật signal Van/tester có thể grant qua Settings.
+
+**Out of scope (Zimperium SDK đã cover):**
+
+- Accessibility services enabled
+- USB debugging / Developer options
+- Screen overlay permission active
+
+---
+
+### FR-CL-12: Extended Sensor Coverage
+
+**Description:** Mở rộng sensor coverage từ 2 (Accelerometer + Gyroscope) lên 7 sensor để khai thác hết hardware behavioral signal có trên smartphone. Mỗi sensor mới cung cấp 1 axis/dimension orthogonal cho fraud detection.
+
+**Scope:** 5 sensor mới registered trong `startSession()` cùng với accel/gyro existing. Output 12 features mới trong `BehavioralFeatures`. Memory cost: ~60 KB/session (acceptable).
+
+**New features — extend BehavioralFeatures:**
+
+| REQ-ID | Field | Type | Default | Sensor | Description |
+|--------|-------|------|---------|--------|-------------|
+| REQ-01 | `magnetometerStabilityX` | double | `0.0` | `TYPE_MAGNETIC_FIELD` | Std dev of X-axis magnetic field (μT) over session. Environmental fingerprint — user thật có pattern lặp (cùng bàn làm, cùng nhà → magnetic pattern stable). Đột ngột thay đổi giữa session = di chuyển bất thường. |
+| REQ-02 | `magnetometerStabilityY` | double | `0.0` | `TYPE_MAGNETIC_FIELD` | Y-axis std dev — same. |
+| REQ-03 | `magnetometerStabilityZ` | double | `0.0` | `TYPE_MAGNETIC_FIELD` | Z-axis std dev — same. |
+| REQ-04 | `magnetometerMagnitudeAvg` | double | `0.0` | `TYPE_MAGNETIC_FIELD` | Avg of √(x²+y²+z²) — magnitude. Indoor (kim loại / cáp) vs outdoor có magnitude khác baseline. Anomaly nếu lệch >30% baseline. |
+| REQ-05 | `lightAvgLux` | double | `0.0` | `TYPE_LIGHT` | Average ambient light (lux) over session. Tối thui (<10 lux) lúc 3am = sus; outdoor sáng (>1000 lux) trong giờ ngủ = anomaly. Sensor delay: NORMAL (~5 Hz đủ). |
+| REQ-06 | `lightStdDevLux` | double | `0.0` | `TYPE_LIGHT` | Std dev of light. Đột biến = di chuyển in/outdoor, hoặc user che màn hình → cố ý phòng quay lén = sus. |
+| REQ-07 | `proximityNearRatio` | double | `0.0` | `TYPE_PROXIMITY` | Tỉ lệ thời gian (0..1) phone "near" (đa số device là binary near/far). Fraud farm phone đặt bàn (always far). User thật cầm tay đôi khi near (pre-call gesture, áp tai). |
+| REQ-08 | `linearAccelStabilityX` | double | `0.0` | `TYPE_LINEAR_ACCELERATION` | Std dev of linear acceleration X-axis (gravity-removed). Cleaner motion signal — accelerometer raw bị gravity offset 9.8 m/s² ở axis Z khi đặt bàn; linear-accel trừ luôn → tap micro-jolt rõ hơn. Sensor delay GAME (~50 Hz). |
+| REQ-09 | `linearAccelStabilityY` | double | `0.0` | `TYPE_LINEAR_ACCELERATION` | Y-axis std dev. |
+| REQ-10 | `linearAccelStabilityZ` | double | `0.0` | `TYPE_LINEAR_ACCELERATION` | Z-axis std dev. |
+| REQ-11 | `rotationVectorPitchStdDev` | double | `0.0` | `TYPE_ROTATION_VECTOR` | Std dev of pitch derived from rotation vector (quaternion fused from 3 sensors → real device orientation). Pitch std dev = mức độ rung trong giờ thao tác. |
+| REQ-12 | `rotationVectorRollStdDev` | double | `0.0` | `TYPE_ROTATION_VECTOR` | Std dev of roll. Bổ sung pitch — orthogonal axis. |
+
+**Implementation note:**
+
+- `BehavioralCollector.startSession()`: register 5 sensor mới qua `SensorManager.registerListener()` cùng accel/gyro existing. Light + proximity dùng `SENSOR_DELAY_NORMAL`; magnetometer + linear-accel + rotation-vector dùng `SENSOR_DELAY_GAME` (consistent với accel/gyro).
+- `SensorEventListener.onSensorChanged()`: extend existing switch-case để route theo `event.sensor.type`. Map quaternion → pitch/roll qua `SensorManager.getOrientation()`.
+- `BehavioralCollector.stopSession()`: existing `unregisterListener(sensorListener)` đã cover (1 listener, multiple sensors).
+- `SensorEvent` data class cần extend `type` enum: hiện có `"accelerometer"`, `"gyroscope"` → thêm `"magnetometer"`, `"light"`, `"proximity"`, `"linear_acceleration"`, `"rotation_vector"`.
+- Compute features trong `extractFeatures()` hoặc helper trong `FeatureComputation.kt`.
+
+**Permission impact:** None. Sensors free trên Android — không cần runtime permission.
+
+**Memory budget:** 50 Hz × 60s × 5 sensors × 4 bytes/sample × 3 axes = ~180 KB/session. Acceptable cho POC; có thể downsample magnetometer + linear-accel xuống 25 Hz nếu cần optimize.
+
+---
+
+### FR-CL-13: Touch Micro-Biometrics
+
+**Description:** Khai thác thêm signal từ raw `TouchEvent` đã có (KHÔNG thay đổi collector). Output 6 features mới qua extractor logic mới trong `FeatureComputation.kt`.
+
+**Scope:** Pure extractor — KHÔNG touch BehavioralCollector. KHÔNG thêm sensor / permission. Chỉ derive thêm signal từ `touchEvents: List<TouchEvent>` đã có sẵn.
+
+**New features — extend BehavioralFeatures:**
+
+| REQ-ID | Field | Type | Default | Description |
+|--------|-------|------|---------|-------------|
+| REQ-01 | `avgTapPrecisionOffsetPx` | double | `0.0` | Mỗi `ACTION_DOWN` event, tính khoảng cách từ tap point (x, y) đến center của 50dp×50dp grid cell gần nhất (option B — approximate, không cần Compose layout hook). Avg qua tất cả tap. Bot/script tap dead-center (offset ~0). Người tap miss center ±5-15px tự nhiên. |
+| REQ-02 | `tapPrecisionStdDev` | double | `0.0` | Std dev của offset trên. Bot offset rất consistent (low std). Người high std do hand jitter. |
+| REQ-03 | `avgInterTapVelocityPxPerMs` | double | `0.0` | Giữa 2 `ACTION_DOWN` liên tiếp (cùng field hoặc cross-field): velocity = √(Δx² + Δy²) / Δt (px/ms). Personal biometric mạnh hơn delay đơn thuần — tốc độ ngón tay di chuyển giữa các tap là chữ ký riêng. |
+| REQ-04 | `interTapVelocityStdDev` | double | `0.0` | Std dev của velocity. Variance nhỏ = motor pattern ổn định; variance lớn = đang căng thẳng/duress hoặc bị duress hold. |
+| REQ-05 | `dominantHandSide` | string enum | `"AMBIGUOUS"` | `"LEFT"` / `"RIGHT"` / `"AMBIGUOUS"`. Dùng `touchCentroidX` đã có (FR-CL-05): nếu centroid >55% screen width consistent qua session = right-hand thumb dominant; <45% = left-hand thumb; ở giữa = AMBIGUOUS. Hand dominance là personal trait stable. Đột nhiên đổi side giữa các session = device bị share hoặc fraud. |
+| REQ-06 | `tapJitterPostDownMs` | double | `0.0` | Avg khoảng thời gian (ms) từ `ACTION_DOWN` đến `ACTION_MOVE` đầu tiên trong cùng tap (nếu user tap-and-hold-vibrate). 0 nếu tap clean (no MOVE follow-up). Người có micro-jitter tự nhiên trên skin (small MOVE events ngay sau DOWN). Bot synthetic không có. |
+
+**Implementation note:**
+
+- All logic trong `data/scorer/FeatureComputation.kt` (hoặc tạo `TouchMicroBiometrics.kt` nếu muốn tách file).
+- Input: existing `touchEvents: List<TouchEvent>` từ `BehavioralCollector.touchEvents`.
+- Output: thêm 6 fields vào `BehavioralFeatures` data class.
+- Wire trong `extractFeatures()` — tương tự pattern Phase 3 (motionAdv, cognitiveAdv).
+- Grid cell size: 50dp default (configurable via const). Dùng `displayMetrics.density` để convert dp→px.
+
+**Permission impact:** None. Pure extractor.
+
