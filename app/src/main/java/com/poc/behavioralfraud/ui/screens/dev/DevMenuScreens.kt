@@ -438,12 +438,16 @@ fun SessionInspectorScreen(
     modifier: Modifier = Modifier,
 ) {
     var counts by remember { mutableStateOf(collector.getEventCounts()) }
+    var features by remember {
+        mutableStateOf<com.poc.behavioralfraud.data.model.BehavioralFeatures?>(null)
+    }
     var tickCount by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(Unit) {
         while (true) {
             delay(500)
             counts = collector.getEventCounts()
+            features = runCatching { collector.extractFeatures() }.getOrNull()
             tickCount += 1
         }
     }
@@ -458,6 +462,7 @@ fun SessionInspectorScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(IPayTheme.spacing.s16),
             verticalArrangement = Arrangement.spacedBy(IPayTheme.spacing.s12),
         ) {
@@ -479,6 +484,46 @@ fun SessionInspectorScreen(
                     EventCountRow(label = "Sensor readings", value = counts["sensor"] ?: 0)
                     EventCountRow(label = "Navigation events", value = counts["navigation"] ?: 0)
                 }
+            }
+
+            // FR-CL-14 — 21 new features grouped into 6 sections.
+            features?.let { f ->
+                FeatureSection(
+                    title = "Hesitation (FR-CL-10)",
+                    rows = listOf(
+                        "decisionTimeOverLimitMs" to "${f.decisionTimeOverLimitMs} ms",
+                        "otpPasted" to f.otpPasted.toString(),
+                    ),
+                )
+                ThreatIndicatorsSection(mockLocationDetected = f.mockLocationDetected)
+                FeatureSection(
+                    title = "Magnetometer (FR-CL-12)",
+                    rows = listOf(
+                        "magnetometerStabilityX" to format3(f.magnetometerStabilityX),
+                        "magnetometerStabilityY" to format3(f.magnetometerStabilityY),
+                        "magnetometerStabilityZ" to format3(f.magnetometerStabilityZ),
+                        "magnetometerMagnitudeAvg" to format3(f.magnetometerMagnitudeAvg),
+                    ),
+                )
+                FeatureSection(
+                    title = "Light + Proximity (FR-CL-12)",
+                    rows = listOf(
+                        "lightAvgLux" to format3(f.lightAvgLux),
+                        "lightStdDevLux" to format3(f.lightStdDevLux),
+                        "proximityNearRatio" to format3(f.proximityNearRatio),
+                    ),
+                )
+                FeatureSection(
+                    title = "Linear-accel + Rotation-vector (FR-CL-12)",
+                    rows = listOf(
+                        "linearAccelStabilityX" to format3(f.linearAccelStabilityX),
+                        "linearAccelStabilityY" to format3(f.linearAccelStabilityY),
+                        "linearAccelStabilityZ" to format3(f.linearAccelStabilityZ),
+                        "rotationVectorPitchStdDev" to format3(f.rotationVectorPitchStdDev),
+                        "rotationVectorRollStdDev" to format3(f.rotationVectorRollStdDev),
+                    ),
+                )
+                TouchMicroBiometricsSection(features = f)
             }
 
             IPayCard(variant = IPayCardVariant.Outlined, modifier = Modifier.fillMaxWidth()) {
@@ -517,6 +562,148 @@ private fun EventCountRow(label: String, value: Int) {
         )
     }
 }
+
+/** FR-CL-14: generic section card with feature label + value rows. */
+@Composable
+private fun FeatureSection(title: String, rows: List<Pair<String, String>>) {
+    IPayCard(variant = IPayCardVariant.Outlined, modifier = Modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(IPayTheme.spacing.s4)) {
+            Text(
+                text = title,
+                style = IPayTheme.typography.titleSmall,
+                color = IPayTheme.colors.textNeutralPrimary,
+            )
+            Spacer(Modifier.height(IPayTheme.spacing.s4))
+            rows.forEach { (label, value) ->
+                EventCountRowText(label = label, value = value)
+            }
+        }
+    }
+}
+
+@Composable
+private fun EventCountRowText(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = label,
+            style = IPayTheme.typography.bodyMedium,
+            color = IPayTheme.colors.textNeutralSecondary,
+        )
+        Text(
+            text = value,
+            style = IPayTheme.typography.bodyEmphasizedMedium,
+            color = IPayTheme.colors.textNeutralPrimary,
+        )
+    }
+}
+
+/** FR-CL-14 REQ-02 — threat indicators with RED highlight when triggered. */
+@Composable
+private fun ThreatIndicatorsSection(mockLocationDetected: Boolean) {
+    val triggered = mockLocationDetected
+    IPayCard(variant = IPayCardVariant.Outlined, modifier = Modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(IPayTheme.spacing.s4)) {
+            Text(
+                text = "Threat indicators (FR-CL-11)",
+                style = IPayTheme.typography.titleSmall,
+                color = if (triggered) {
+                    IPayTheme.colors.iconWarning
+                } else {
+                    IPayTheme.colors.textNeutralPrimary
+                },
+            )
+            Spacer(Modifier.height(IPayTheme.spacing.s4))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = "mockLocationDetected",
+                    style = IPayTheme.typography.bodyMedium,
+                    color = IPayTheme.colors.textNeutralSecondary,
+                )
+                Text(
+                    text = mockLocationDetected.toString(),
+                    style = IPayTheme.typography.bodyEmphasizedMedium,
+                    color = if (mockLocationDetected) {
+                        IPayTheme.colors.iconWarning
+                    } else {
+                        IPayTheme.colors.textNeutralPrimary
+                    },
+                )
+            }
+        }
+    }
+}
+
+/** FR-CL-14 REQ-06 — touch micro-biometrics with hand-side chip color-coded. */
+@Composable
+private fun TouchMicroBiometricsSection(
+    features: com.poc.behavioralfraud.data.model.BehavioralFeatures,
+) {
+    IPayCard(variant = IPayCardVariant.Outlined, modifier = Modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(IPayTheme.spacing.s4)) {
+            Text(
+                text = "Touch micro-biometrics (FR-CL-13)",
+                style = IPayTheme.typography.titleSmall,
+                color = IPayTheme.colors.textNeutralPrimary,
+            )
+            Spacer(Modifier.height(IPayTheme.spacing.s4))
+            EventCountRowText("avgTapPrecisionOffsetPx", format3(features.avgTapPrecisionOffsetPx))
+            EventCountRowText("tapPrecisionStdDev", format3(features.tapPrecisionStdDev))
+            EventCountRowText(
+                "avgInterTapVelocityPxPerMs",
+                format3(features.avgInterTapVelocityPxPerMs),
+            )
+            EventCountRowText("interTapVelocityStdDev", format3(features.interTapVelocityStdDev))
+            EventCountRowText("tapJitterPostDownMs", format3(features.tapJitterPostDownMs))
+            // dominantHandSide as color-coded chip
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "dominantHandSide",
+                    style = IPayTheme.typography.bodyMedium,
+                    color = IPayTheme.colors.textNeutralSecondary,
+                )
+                HandSideChip(side = features.dominantHandSide)
+            }
+        }
+    }
+}
+
+@Composable
+private fun HandSideChip(side: String) {
+    val (chipBg, chipText) = when (side) {
+        "LEFT" -> IPayTheme.colors.bgBrandSecondary to IPayTheme.colors.textBrandPrimary
+        "RIGHT" -> com.poc.behavioralfraud.ui.theme.IPayPalette.Green10 to
+            IPayTheme.colors.iconSuccess
+        else -> IPayTheme.colors.bgNeutralSecondary to IPayTheme.colors.textNeutralTertiary
+    }
+    androidx.compose.foundation.layout.Box(
+        modifier = Modifier
+            .clip(androidx.compose.foundation.shape.RoundedCornerShape(percent = 50))
+            .background(chipBg)
+            .padding(
+                horizontal = IPayTheme.spacing.s12,
+                vertical = IPayTheme.spacing.s4,
+            ),
+    ) {
+        Text(
+            text = side,
+            style = IPayTheme.typography.bodyEmphasizedSmall,
+            color = chipText,
+        )
+    }
+}
+
+/** Format float with 3 decimal places. */
+private fun format3(value: Double): String = "%.3f".format(value)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Manual Override — REQ-20
