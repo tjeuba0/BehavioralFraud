@@ -1,6 +1,7 @@
 package com.poc.behavioralfraud
 
 import android.os.Bundle
+import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -11,7 +12,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.core.view.WindowCompat
-import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -28,7 +28,6 @@ import com.poc.behavioralfraud.ui.screens.dev.SessionInspectorScreen
 import com.poc.behavioralfraud.ui.screens.ProfileScreen
 import com.poc.behavioralfraud.ui.screens.TransferScreen
 import com.poc.behavioralfraud.ui.screens.TransferViewModel
-import com.poc.behavioralfraud.ui.screens.login.LoginScreen
 import com.poc.behavioralfraud.ui.screens.transfer.OtpScreen
 import com.poc.behavioralfraud.ui.screens.transfer.RecipientScreen
 import com.poc.behavioralfraud.ui.screens.transfer.TransferFormScreen
@@ -38,14 +37,9 @@ import com.poc.behavioralfraud.ui.screens.transfer.TransferType
 import com.poc.behavioralfraud.ui.theme.BehavioralFraudTheme
 
 /**
- * Hosts the entire Compose tree.
- *
- * Extends [FragmentActivity] (not bare ComponentActivity) — required by
- * `androidx.biometric.BiometricPrompt` used in [LoginScreen]. FragmentActivity
- * is fully compose-compatible (activity-compose's setContent is an extension
- * on ComponentActivity, FragmentActivity inherits it).
+ * Hosts the entire Compose tree. Single-activity host for the Compose nav graph.
  */
-class MainActivity : FragmentActivity() {
+class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -67,13 +61,9 @@ class MainActivity : FragmentActivity() {
 /**
  * Root navigation graph — FR-CL-10 REQ-09.
  *
- * Replaces the previous `when (currentScreen)` switch-case with a NavHost.
- * Routes registered in [AppRoutes]. Future tasks (TASK-016 Login, TASK-018..022
- * transfer flow, TASK-024 Dev Menu) extend this graph by adding `composable(...)`
- * blocks for new routes.
- *
- * Start destination: [AppRoutes.LOGIN] (TASK-016). After auth, navigate to
- * [AppRoutes.HOME] popping LOGIN inclusive so back from Home exits app.
+ * Routes registered in [AppRoutes]. Start destination: [AppRoutes.HOME].
+ * (Login flow was removed — POC scope is the transfer flow + behavioral
+ * collection; no real auth needed for the demo.)
  */
 @Composable
 fun AppNavigation() {
@@ -90,7 +80,7 @@ fun AppNavigation() {
     // Pop:     incoming parallax-shifts back from left + outgoing slides out right.
     NavHost(
         navController = navController,
-        startDestination = AppRoutes.LOGIN,
+        startDestination = AppRoutes.HOME,
         enterTransition = {
             slideInHorizontally(tween(TRANSITION_MS)) { it } + fadeIn(tween(TRANSITION_MS))
         },
@@ -104,15 +94,6 @@ fun AppNavigation() {
             slideOutHorizontally(tween(TRANSITION_MS)) { it } + fadeOut(tween(TRANSITION_MS))
         },
     ) {
-        composable(AppRoutes.LOGIN) {
-            LoginScreen(
-                onAuthenticated = {
-                    navController.navigate(AppRoutes.HOME) {
-                        popUpTo(AppRoutes.LOGIN) { inclusive = true }
-                    }
-                },
-            )
-        }
         composable(AppRoutes.HOME) {
             HomeRoute(
                 navController = navController,

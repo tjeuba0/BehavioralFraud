@@ -80,12 +80,6 @@ dependencies {
     // Navigation
     implementation("androidx.navigation:navigation-compose:2.7.7")
 
-    // Biometric (Touch ID / Face ID) — TASK-016 / FR-CL-09
-    implementation("androidx.biometric:biometric:1.2.0-alpha05")
-
-    // Fragment — required transitively by BiometricPrompt (FragmentActivity host)
-    implementation("androidx.fragment:fragment-ktx:1.8.0")
-
     // Lifecycle + ViewModel
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.3")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.3")
