@@ -720,3 +720,80 @@ Output of on-device feature extraction, sent to backend as JSON. Backend needs c
 
 **Permission impact:** None. Pure extractor.
 
+---
+
+## Update: Section 4 — Mobile Detection Pipeline (mirror Backend FR-BE-RULES)
+
+> Bổ sung sau backend đã ship TASK-013/014/015 (PR #16/#17/#18). Mobile cần align để (a) inspect 21 features mới trong Dev Menu, (b) khi backend down LocalScorer fallback có rules đồng nhất với BE, (c) E2E acceptance test verify pipeline thực sự work.
+
+### FR-CL-14: Dev Menu surface 21 new features
+
+**Description:** SessionInspectorScreen hiện chỉ hiển thị baseline 49 fields từ Phase 1-3. Sau khi TASK-026/027/028 merge thêm 19 fields + 2 fields cũ FR-CL-10, Van cần Dev Menu surface để verify trên device thật rằng giá trị plausible (vd lightAvgLux > 0 indoor, dominantHandSide đúng).
+
+**Scope:** UI-only update trong `ui/screens/dev/SessionInspectorScreen.kt`. Không touch collector / scorer.
+
+**New requirements:**
+
+| REQ-ID | Section | Fields |
+|--------|---------|--------|
+| REQ-01 | "Hesitation" | decisionTimeOverLimitMs, otpPasted |
+| REQ-02 | "Threat indicators" | mockLocationDetected |
+| REQ-03 | "Extended sensors — Magnetometer" | magnetometerStabilityX/Y/Z, magnetometerMagnitudeAvg |
+| REQ-04 | "Extended sensors — Light + Proximity" | lightAvgLux, lightStdDevLux, proximityNearRatio |
+| REQ-05 | "Extended sensors — Linear acceleration + Rotation vector" | linearAccelStabilityX/Y/Z, rotationVectorPitchStdDev/RollStdDev |
+| REQ-06 | "Touch micro-biometrics" | avgTapPrecisionOffsetPx, tapPrecisionStdDev, avgInterTapVelocityPxPerMs, interTapVelocityStdDev, dominantHandSide, tapJitterPostDownMs |
+
+Acceptance: 21 fields visible trên device sau 1 transfer session, formatted với decimal precision phù hợp (3 chữ số sau dấu phẩy cho float, integer raw cho count, boolean True/False).
+
+---
+
+### FR-CL-15: LocalScorer fallback rules (mirror Backend FR-BE-RULES)
+
+**Description:** Khi backend unreachable, `LocalScorer.kt` chạy on-device để cung cấp fallback risk score. Hiện tại scorer chỉ dùng features từ FR-CL-05/06/07. Sau khi BE ship TASK-015 với 5 deterministic rules, mobile cần port các rules này sang Kotlin để fallback path cho consistent verdict.
+
+**Scope:** Pure logic in `data/scorer/LocalScorer.kt`. Mirror exactly 5 rules + weights + score cap từ `app/services/risk_rule_engine.py` (BE TASK-015).
+
+**5 rules (must match BE exactly):**
+
+| Rule | Trigger | Weight |
+|---|---|---|
+| GPS spoofing | `mockLocationDetected = true` | +30 |
+| Bot tap precision | `avgTapPrecisionOffsetPx < 2.0 AND tapPrecisionStdDev < 1.0 AND totalTouchEvents >= 5` | +25 |
+| Synthetic velocity | `interTapVelocityStdDev < 0.005 AND totalTouchEvents >= 5` | +20 |
+| OTP paste violation | `otpPasted = true` | +20 |
+| Dark anomaly | `lightAvgLux < 10 AND sessionHourOfDay in [0,5]` | +15 |
+
+Score capped at 100 (`SCORE_CAP`).
+
+**Reasons (Vietnamese, must match BE strings):**
+- "Phát hiện giả mạo GPS"
+- "Mẫu tap dead-center bất thường (nghi ngờ bot)"
+- "Tốc độ giữa các tap đồng đều bất thường"
+- "OTP nhập bằng paste — vi phạm UX (Soft OTP DISPLAYED only)"
+- "Môi trường tối + thời gian bất thường"
+
+**Integration:** When backend call fails, `LocalScorer.computeRisk()` runs rule engine on `BehavioralFeatures` and returns `LocalScoreResult(score, riskLevel, reasons)`. Existing fallback path in `TransferOrchestratorViewModel.runVerification()` continues to use this.
+
+---
+
+### FR-CL-16: E2E acceptance test — fraud scenario
+
+**Description:** Verify pipeline TASK-013..015 + TASK-026..028 + TASK-029/030 thực sự detect được fraud trong real-device test.
+
+**Scope:** Manual test plan — không tự động hoá vì cần 2 device.
+
+**Test scenario:**
+
+1. Tester A enroll 3 lần (3 transfer sessions) trên device A → backend build profile
+2. Tester B sử dụng device A của Tester A để chuyển 1 lần (mô phỏng fraud — ai khác chiếm device)
+3. Verify trong Dev Menu > Risk History:
+   - Tester B verification có `riskScore` >> mức trung bình của 3 enrollment baseline
+   - Reasons mention specific FR-CL-10..13 features (nếu có rule fired) hoặc LLM hint
+4. Optional: Cài fake-GPS app + grant LOCATION permission → run 1 session → verify `mockLocationDetected = true` trong Session Inspector + risk score ≥ 30 baseline (rule weight)
+
+**Acceptance:**
+
+- [ ] Score gap Tester A baseline → Tester B verification ≥ 20 points
+- [ ] Reasons array non-empty cho fraud session
+- [ ] Backend log có `rule_score`, `llm_score`, `rules_fired` field (per BE TASK-015)
+- [ ] Dev Menu Risk History persist fraud entry, không mất sau app restart

@@ -345,7 +345,10 @@ ProfileMetric("Gyro stability", String.format("%.6f", avgGyro), "Trung bình 3 t
 | TASK-025 | E2E manual smoke + Figma visual diff + production-feel audit | FR-CL-08, 09, 10 acceptance | P1 | planned | TASK-024 |
 | TASK-026 | mockLocationDetected — GPS spoofing fraud signal | FR-CL-11 (REQ-01) | P1 | done | none |
 | TASK-027 | Extended sensor coverage (magnetometer + light + proximity + linear-accel + rotation-vector) | FR-CL-12 (REQ-01..12) | P1 | done | none |
-| TASK-028 | Touch micro-biometrics (tap precision + inter-tap velocity + hand dominance + tap jitter) | FR-CL-13 (REQ-01..06) | P1 | review | none |
+| TASK-028 | Touch micro-biometrics (tap precision + inter-tap velocity + hand dominance + tap jitter) | FR-CL-13 (REQ-01..06) | P1 | done | none |
+| TASK-029 | Dev Menu Session Inspector — surface 21 fields (FR-CL-10/11/12/13) | FR-CL-14 (REQ-01..06) | P1 | planned | TASK-026, 027, 028 |
+| TASK-030 | LocalScorer fallback rules — mirror BE TASK-015 RiskRuleEngine | FR-CL-15 | P1 | planned | TASK-026, 027, 028 + BE TASK-015 |
+| TASK-031 | E2E acceptance test — fraud scenario verify pipeline | FR-CL-16 | P2 | planned | TASK-029, 030 |
 
 ---
 
@@ -823,4 +826,145 @@ private fun isMockLocationActive(): Boolean {
 - [ ] `extractFeatures()` wire 6 features
 - [ ] Build green
 - [ ] Manual test: chạy 1 transfer → Session Inspector cho thấy 6 features có giá trị plausible (avgTapPrecisionOffsetPx > 0, dominantHandSide ∈ {LEFT, RIGHT, AMBIGUOUS})
+
+
+---
+
+### TASK-029: Dev Menu Session Inspector — surface 21 new fields
+
+- **SRS section:** FR-CL-14 (REQ-01..06)
+- **Branch:** `feat/task-029-session-inspector-extended`
+- **Dependencies:** TASK-026, 027, 028 (all merged)
+- **Status:** planned
+
+**Goal:** SessionInspectorScreen surface 21 fields mới (decisionTimeOverLimitMs, otpPasted, mockLocationDetected, 12 sensor, 6 touch micro-biometrics) cho Van inspect trên device thật, debug fraud scenario.
+
+**Files thay đổi:**
+- MODIFY: `app/src/main/java/com/poc/behavioralfraud/ui/screens/dev/DevMenuScreens.kt` — extend `SessionInspectorScreen` với 6 sections mới (theo FR-CL-14 REQ-01..06)
+
+**Section grouping (UI):**
+1. **Hesitation** — decisionTimeOverLimitMs (ms), otpPasted (bool)
+2. **Threat indicators** — mockLocationDetected (bool, RED text nếu true)
+3. **Magnetometer** — magnetometerStabilityX/Y/Z + magnitude (4 floats)
+4. **Light + Proximity** — lightAvgLux + std + proximityNearRatio (3 floats)
+5. **Linear-accel + Rotation-vector** — 5 floats
+6. **Touch micro-biometrics** — 6 fields, dominantHandSide làm chip color-coded (LEFT=blue, RIGHT=green, AMBIGUOUS=gray)
+
+**Constraints:**
+- KHÔNG modify collector / scorer
+- Format: float với 3 chữ số sau dấu phẩy, integer raw, boolean True/False
+- Reuse existing styled list-item Composable từ Phase 2/3 fields hiện đang display
+
+**Done when:**
+- [ ] 21 fields visible trong SessionInspectorScreen sau 1 transfer
+- [ ] mockLocationDetected=true → highlight RED (visual hint)
+- [ ] dominantHandSide chip có 3 màu phân biệt
+- [ ] Build green
+- [ ] Manual test: complete 1 session → Dev Menu > Session Inspector, scroll xem đủ 21 fields
+
+---
+
+### TASK-030: LocalScorer fallback rules — mirror BE TASK-015
+
+- **SRS section:** FR-CL-15
+- **Branch:** `feat/task-030-localscorer-rule-engine`
+- **Dependencies:** TASK-026..028 + BE TASK-015 (merged 2026-05-02)
+- **Status:** planned
+
+**Goal:** Port 5 deterministic rules từ BE `app/services/risk_rule_engine.py` sang `app/src/main/java/com/poc/behavioralfraud/data/scorer/LocalScorer.kt`. Khi backend down, mobile fallback path có rules đồng nhất với BE → consistent verdict, không lệch hành vi giữa online/offline.
+
+**Files thay đổi:**
+- MODIFY: `app/src/main/java/com/poc/behavioralfraud/data/scorer/LocalScorer.kt` — add `RuleEngine` companion object hoặc internal class
+
+**Implementation contract:**
+
+```kotlin
+internal data class RuleResult(val score: Int, val reasons: List<String>)
+
+internal object LocalScoreRules {
+    private const val WEIGHT_GPS_SPOOFING = 30
+    private const val WEIGHT_BOT_TAP_PRECISION = 25
+    private const val WEIGHT_SYNTHETIC_VELOCITY = 20
+    private const val WEIGHT_OTP_PASTE_VIOLATION = 20
+    private const val WEIGHT_DARK_ANOMALY = 15
+
+    private const val TAP_PRECISION_OFFSET_MAX_PX = 2.0
+    private const val TAP_PRECISION_STD_MAX_PX = 1.0
+    private const val TAP_PRECISION_MIN_TOUCHES = 5
+    private const val VELOCITY_STD_MAX = 0.005
+    private const val VELOCITY_MIN_TOUCHES = 5
+    private const val DARK_LIGHT_LUX_MAX = 10.0
+    private const val SCORE_CAP = 100
+
+    fun evaluate(features: BehavioralFeatures): RuleResult { ... }
+}
+```
+
+**Constraints:**
+- Weights + thresholds + reasons MATCH BE exactly (đối chiếu với `app/services/risk_rule_engine.py`)
+- Reasons in Vietnamese (matching BE strings):
+  - "Phát hiện giả mạo GPS"
+  - "Mẫu tap dead-center bất thường (nghi ngờ bot)"
+  - "Tốc độ giữa các tap đồng đều bất thường"
+  - "OTP nhập bằng paste — vi phạm UX (Soft OTP DISPLAYED only)"
+  - "Môi trường tối + thời gian bất thường"
+- LocalScorer.computeRisk() — merge rule_score với existing baseline scoring: final = max(rule_score, baseline_heuristic)
+- Wire trong `TransferOrchestratorViewModel.runVerification()` fallback branch (đã có path khi backend exception)
+
+**Done when:**
+- [ ] `LocalScoreRules` object trong LocalScorer.kt với 5 rules
+- [ ] Unit tests boundary trigger/silent cho từng rule (mirror BE test_risk_rule_engine.py)
+- [ ] Build green
+- [ ] Manual test: airplane mode → run transfer → backend fails → LocalScorer returns score with rule reasons khi mock fraud features
+
+---
+
+### TASK-031: E2E acceptance test — fraud scenario
+
+- **SRS section:** FR-CL-16
+- **Branch:** `feat/task-031-e2e-fraud-test`
+- **Dependencies:** TASK-029, 030
+- **Status:** planned
+
+**Goal:** Verify pipeline end-to-end (mobile → backend → LLM + RuleEngine) thực sự detect fraud trong real-device test với 2 tester.
+
+**Files thay đổi:**
+- NEW: `docs/test-plans/E2E_FRAUD_SCENARIO.md` — manual test plan + result template
+- MODIFY: `.claude/docs/tasks.md` — TASK-031 status update với test results
+
+**Test scenarios:**
+
+**Scenario A — Identity fraud** (no mock GPS, just different person):
+1. Tester A enroll 3 lần trên device (3 transfer to fake recipient, complete each)
+2. Backend builds profile with Tester A baseline
+3. Tester B (different person) sử dụng device A → 1 transfer
+4. Verify Dev Menu > Risk History:
+   - Tester B verification riskScore ≥ Tester A average + 20 points
+   - Reasons array non-empty
+
+**Scenario B — GPS spoofing**:
+1. Cài fake-GPS app (vd "Fake GPS Location")
+2. Settings > grant ACCESS_COARSE_LOCATION cho BehavioralFraud
+3. Activate fake GPS
+4. Run 1 transfer
+5. Verify:
+   - Session Inspector shows `mockLocationDetected = true`
+   - Risk History entry có `Phát hiện giả mạo GPS` trong reasons
+   - Score ≥ 30 baseline (rule weight)
+
+**Scenario C — Backend offline fallback**:
+1. Disable WiFi + cellular (airplane mode)
+2. Run 1 transfer with synthetic fraud features (mockLocation grant + fake-GPS)
+3. Verify:
+   - Backend call fails gracefully (no crash, no UI error visible)
+   - LocalScorer fires rules in offline path
+   - Risk History shows `source: local-fallback` với rule reasons
+
+**Done when:**
+- [ ] E2E_FRAUD_SCENARIO.md committed với template
+- [ ] All 3 scenarios run + results documented (screenshots OK trong PR description)
+- [ ] Score gap ≥ 20 in Scenario A
+- [ ] Reasons match expected per scenario
+- [ ] Backend logs show `rule_score`/`llm_score`/`rules_fired` correctly (verify với SSH access tới VPS log nếu cần)
+- [ ] TASK-013..015 + TASK-026..028 + TASK-029..030 → marked `done` trong tasks.md sau khi smoke test pass
 
