@@ -87,26 +87,63 @@ class BehavioralCollector(private val context: Context) : DefaultLifecycleObserv
     private var decisionTimeOverLimitMs: Long = 0L
 
     // Sensor listener
+    // Reusable buffers for rotation-vector → orientation conversion (FR-CL-12 REQ-11/12).
+    // Allocated once to avoid per-sample garbage.
+    private val rotationMatrix = FloatArray(9)
+    private val orientationOut = FloatArray(3)
+
     private val sensorListener = object : SensorEventListener {
         override fun onSensorChanged(event: android.hardware.SensorEvent) {
             if (!isCollecting) return
-            val type = when (event.sensor.type) {
-                Sensor.TYPE_ACCELEROMETER -> "accelerometer"
-                Sensor.TYPE_GYROSCOPE -> "gyroscope"
-                else -> return
+            when (event.sensor.type) {
+                Sensor.TYPE_ACCELEROMETER -> addXYZ("accelerometer", event)
+                Sensor.TYPE_GYROSCOPE -> addXYZ("gyroscope", event)
+                Sensor.TYPE_MAGNETIC_FIELD -> addXYZ("magnetometer", event)
+                Sensor.TYPE_LINEAR_ACCELERATION -> addXYZ("linear_acceleration", event)
+                Sensor.TYPE_LIGHT -> addScalar("light", event.values[0])
+                Sensor.TYPE_PROXIMITY -> addScalar("proximity", event.values[0])
+                Sensor.TYPE_ROTATION_VECTOR -> {
+                    // Convert quaternion → [azimuth, pitch, roll] in radians.
+                    SensorManager.getRotationMatrixFromVector(rotationMatrix, event.values)
+                    SensorManager.getOrientation(rotationMatrix, orientationOut)
+                    sensorEvents.add(
+                        SensorEvent(
+                            timestamp = System.currentTimeMillis(),
+                            type = "rotation_vector",
+                            x = orientationOut[1],  // pitch
+                            y = orientationOut[2],  // roll
+                            z = orientationOut[0],  // azimuth (kept for completeness)
+                        ),
+                    )
+                }
             }
-            sensorEvents.add(
-                SensorEvent(
-                    timestamp = System.currentTimeMillis(),
-                    type = type,
-                    x = event.values[0],
-                    y = event.values[1],
-                    z = event.values[2]
-                )
-            )
         }
 
         override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+    }
+
+    private fun addXYZ(type: String, event: android.hardware.SensorEvent) {
+        sensorEvents.add(
+            SensorEvent(
+                timestamp = System.currentTimeMillis(),
+                type = type,
+                x = event.values[0],
+                y = event.values[1],
+                z = event.values[2],
+            ),
+        )
+    }
+
+    private fun addScalar(type: String, value: Float) {
+        sensorEvents.add(
+            SensorEvent(
+                timestamp = System.currentTimeMillis(),
+                type = type,
+                x = value,
+                y = 0f,
+                z = 0f,
+            ),
+        )
     }
 
     override fun onPause(owner: LifecycleOwner) { onPause() }
@@ -174,6 +211,24 @@ class BehavioralCollector(private val context: Context) : DefaultLifecycleObserv
         }
         sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)?.let {
             sensorManager.registerListener(sensorListener, it, SensorManager.SENSOR_DELAY_GAME)
+        }
+        // FR-CL-12: extended sensor coverage. GAME (~50Hz) for motion-correlated
+        // sensors so they align with accel/gyro window; NORMAL for ambient
+        // (light/proximity) — those don't need high resolution.
+        sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)?.let {
+            sensorManager.registerListener(sensorListener, it, SensorManager.SENSOR_DELAY_GAME)
+        }
+        sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)?.let {
+            sensorManager.registerListener(sensorListener, it, SensorManager.SENSOR_DELAY_GAME)
+        }
+        sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)?.let {
+            sensorManager.registerListener(sensorListener, it, SensorManager.SENSOR_DELAY_GAME)
+        }
+        sensorManager.getDefaultSensor(Sensor.TYPE_LIGHT)?.let {
+            sensorManager.registerListener(sensorListener, it, SensorManager.SENSOR_DELAY_NORMAL)
+        }
+        sensorManager.getDefaultSensor(Sensor.TYPE_PROXIMITY)?.let {
+            sensorManager.registerListener(sensorListener, it, SensorManager.SENSOR_DELAY_NORMAL)
         }
 
         // Phase 3 — Register screenshot observer (REQ-07)
@@ -353,6 +408,9 @@ class BehavioralCollector(private val context: Context) : DefaultLifecycleObserv
         )
         val cognitiveAdv = computeCognitiveAdvanced(base.sortedTextEvents)
 
+        // === FR-CL-12: Extended sensor coverage (5 new sensors, 12 features) ===
+        val extSensors = computeExtendedSensorFeatures(sensorSnapshot)
+
         return BehavioralFeatures(
             sessionDurationMs = endTime - sessionStartTime,
             avgInterCharDelayMs = base.avgInterChar,
@@ -435,6 +493,19 @@ class BehavioralCollector(private val context: Context) : DefaultLifecycleObserv
             screenshotDuringInput = screenshotDetected,
             // FR-CL-10 REQ-13
             decisionTimeOverLimitMs = decisionTimeOverLimitMs,
+            // FR-CL-12 — Extended sensor coverage
+            magnetometerStabilityX = extSensors.magnetometerStabilityX,
+            magnetometerStabilityY = extSensors.magnetometerStabilityY,
+            magnetometerStabilityZ = extSensors.magnetometerStabilityZ,
+            magnetometerMagnitudeAvg = extSensors.magnetometerMagnitudeAvg,
+            lightAvgLux = extSensors.lightAvgLux,
+            lightStdDevLux = extSensors.lightStdDevLux,
+            proximityNearRatio = extSensors.proximityNearRatio,
+            linearAccelStabilityX = extSensors.linearAccelStabilityX,
+            linearAccelStabilityY = extSensors.linearAccelStabilityY,
+            linearAccelStabilityZ = extSensors.linearAccelStabilityZ,
+            rotationVectorPitchStdDev = extSensors.rotationVectorPitchStdDev,
+            rotationVectorRollStdDev = extSensors.rotationVectorRollStdDev,
         )
     }
 
