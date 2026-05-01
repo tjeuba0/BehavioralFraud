@@ -2,6 +2,11 @@ package com.poc.behavioralfraud
 
 import android.os.Bundle
 import androidx.activity.compose.setContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -80,9 +85,24 @@ fun AppNavigation() {
     // (TransferType → Recipient → Form → Otp → Success).
     val orchestratorVm: TransferOrchestratorViewModel = viewModel()
 
+    // iOS-style horizontal slide transitions for production-feel navigation.
+    // Forward: incoming slides in from right + outgoing parallax-shifts left 25%.
+    // Pop:     incoming parallax-shifts back from left + outgoing slides out right.
     NavHost(
         navController = navController,
         startDestination = AppRoutes.LOGIN,
+        enterTransition = {
+            slideInHorizontally(tween(TRANSITION_MS)) { it } + fadeIn(tween(TRANSITION_MS))
+        },
+        exitTransition = {
+            slideOutHorizontally(tween(TRANSITION_MS)) { -it / 4 } + fadeOut(tween(TRANSITION_MS))
+        },
+        popEnterTransition = {
+            slideInHorizontally(tween(TRANSITION_MS)) { -it / 4 } + fadeIn(tween(TRANSITION_MS))
+        },
+        popExitTransition = {
+            slideOutHorizontally(tween(TRANSITION_MS)) { it } + fadeOut(tween(TRANSITION_MS))
+        },
     ) {
         composable(AppRoutes.LOGIN) {
             LoginScreen(
@@ -226,3 +246,7 @@ private fun HomeRoute(
         onNavigateToDevPreview = { navController.navigate(AppRoutes.DEV) },
     )
 }
+
+/** Navigation transition duration — kept short so back navigation feels snappy. */
+private const val TRANSITION_MS = 280
+

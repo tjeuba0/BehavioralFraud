@@ -48,6 +48,7 @@ import com.poc.behavioralfraud.ui.components.IPayButtonSize
 import com.poc.behavioralfraud.ui.components.IPayButtonVariant
 import com.poc.behavioralfraud.ui.components.IPayScreenBackground
 import com.poc.behavioralfraud.ui.components.IPayTopBar
+import com.poc.behavioralfraud.ui.components.IPayTopBarVariant
 import com.poc.behavioralfraud.ui.theme.IPayPalette
 import com.poc.behavioralfraud.ui.theme.IPayTheme
 import kotlinx.coroutines.delay
@@ -99,7 +100,11 @@ fun OtpScreen(
     Column(
         modifier = Modifier.fillMaxSize(),
     ) {
-        IPayTopBar(title = "Xác nhận giao dịch", onBack = onBack)
+        IPayTopBar(
+            title = "Xác nhận giao dịch",
+            variant = IPayTopBarVariant.Transparent,
+            onBack = onBack,
+        )
 
         Column(
             modifier = Modifier

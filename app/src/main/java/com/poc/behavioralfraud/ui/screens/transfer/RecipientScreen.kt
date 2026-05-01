@@ -45,6 +45,7 @@ import com.poc.behavioralfraud.data.mock.MockBanks
 import com.poc.behavioralfraud.ui.components.IPayHorizontalTabs
 import com.poc.behavioralfraud.ui.components.IPayScreenBackground
 import com.poc.behavioralfraud.ui.components.IPayTopBar
+import com.poc.behavioralfraud.ui.components.IPayTopBarVariant
 import com.poc.behavioralfraud.ui.components.safeClickable
 import com.poc.behavioralfraud.ui.theme.IPayPalette
 import com.poc.behavioralfraud.ui.theme.IPayTheme
@@ -87,6 +88,7 @@ fun RecipientScreen(
     ) {
         IPayTopBar(
             title = "Thông tin người nhận",
+            variant = IPayTopBarVariant.Transparent,
             onBack = onBack,
             trailing = {
                 Text(
