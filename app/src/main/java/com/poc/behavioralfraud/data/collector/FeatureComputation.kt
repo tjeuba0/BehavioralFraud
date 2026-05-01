@@ -368,6 +368,76 @@ internal fun computeHesitationCategory(
 }
 
 /**
+ * FR-CL-12 — Extended sensor features (12 fields across 5 new sensors).
+ *
+ * Pure computation — input is the snapshot of `sensorEvents` after the
+ * collector tags each event with its `type` string. Returns a result struct
+ * the orchestrator wires into `BehavioralFeatures`.
+ *
+ * Empty / missing sensor data degrades to zero-result (sensor not available
+ * on device or never fired during session). Backend payload stays backward
+ * compatible — every field defaults to 0.0.
+ */
+internal data class ExtendedSensorFeatures(
+    // Magnetometer (REQ-01..04)
+    val magnetometerStabilityX: Double,
+    val magnetometerStabilityY: Double,
+    val magnetometerStabilityZ: Double,
+    val magnetometerMagnitudeAvg: Double,
+    // Light (REQ-05..06)
+    val lightAvgLux: Double,
+    val lightStdDevLux: Double,
+    // Proximity (REQ-07)
+    val proximityNearRatio: Double,
+    // Linear acceleration (REQ-08..10)
+    val linearAccelStabilityX: Double,
+    val linearAccelStabilityY: Double,
+    val linearAccelStabilityZ: Double,
+    // Rotation vector (REQ-11..12)
+    val rotationVectorPitchStdDev: Double,
+    val rotationVectorRollStdDev: Double,
+)
+
+internal fun computeExtendedSensorFeatures(
+    sensorSnapshot: List<SensorEvent>,
+): ExtendedSensorFeatures {
+    val mag = sensorSnapshot.filter { it.type == "magnetometer" }
+    val light = sensorSnapshot.filter { it.type == "light" }
+    val prox = sensorSnapshot.filter { it.type == "proximity" }
+    val linAccel = sensorSnapshot.filter { it.type == "linear_acceleration" }
+    val rotVec = sensorSnapshot.filter { it.type == "rotation_vector" }
+
+    val magMagnitudeAvg = if (mag.isEmpty()) 0.0 else mag.map { e ->
+        kotlin.math.sqrt((e.x * e.x + e.y * e.y + e.z * e.z).toDouble())
+    }.average()
+
+    // Proximity: most devices report near=0, far=maxRange (binary). Treat any
+    // value < 5cm as "near". Ratio = fraction of samples in near state.
+    val proximityNearRatio = if (prox.isEmpty()) {
+        0.0
+    } else {
+        val nearCount = prox.count { it.x < 5f }
+        nearCount.toDouble() / prox.size
+    }
+
+    return ExtendedSensorFeatures(
+        magnetometerStabilityX = stdDev(mag.map { it.x }),
+        magnetometerStabilityY = stdDev(mag.map { it.y }),
+        magnetometerStabilityZ = stdDev(mag.map { it.z }),
+        magnetometerMagnitudeAvg = magMagnitudeAvg,
+        lightAvgLux = if (light.isEmpty()) 0.0 else light.map { it.x.toDouble() }.average(),
+        lightStdDevLux = stdDev(light.map { it.x }),
+        proximityNearRatio = proximityNearRatio,
+        linearAccelStabilityX = stdDev(linAccel.map { it.x }),
+        linearAccelStabilityY = stdDev(linAccel.map { it.y }),
+        linearAccelStabilityZ = stdDev(linAccel.map { it.z }),
+        // Listener stores pitch in x and roll in y for rotation_vector events.
+        rotationVectorPitchStdDev = stdDev(rotVec.map { it.x }),
+        rotationVectorRollStdDev = stdDev(rotVec.map { it.y }),
+    )
+}
+
+/**
  * FR-CL-13 — Touch micro-biometrics (6 features).
  *
  * Pure extractor. Derived entirely from raw [TouchEvent]s already collected

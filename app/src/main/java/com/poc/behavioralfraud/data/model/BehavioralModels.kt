@@ -197,6 +197,26 @@ data class BehavioralFeatures(
     // ACCESS_COARSE_LOCATION not granted — signal silently disabled.
     val mockLocationDetected: Boolean = false,
 
+    // FR-CL-12 — Extended sensor coverage (12 features across 5 new sensors).
+    // All zero-defaults so backend payload stays backward-compat.
+    // Magnetometer (REQ-01..04) — environmental fingerprint
+    val magnetometerStabilityX: Double = 0.0,
+    val magnetometerStabilityY: Double = 0.0,
+    val magnetometerStabilityZ: Double = 0.0,
+    val magnetometerMagnitudeAvg: Double = 0.0,
+    // Light (REQ-05..06) — ambient anomaly
+    val lightAvgLux: Double = 0.0,
+    val lightStdDevLux: Double = 0.0,
+    // Proximity (REQ-07) — phone hold pose
+    val proximityNearRatio: Double = 0.0,
+    // Linear acceleration (REQ-08..10) — gravity-removed motion
+    val linearAccelStabilityX: Double = 0.0,
+    val linearAccelStabilityY: Double = 0.0,
+    val linearAccelStabilityZ: Double = 0.0,
+    // Rotation vector (REQ-11..12) — quaternion-derived orientation jitter
+    val rotationVectorPitchStdDev: Double = 0.0,
+    val rotationVectorRollStdDev: Double = 0.0,
+
     // FR-CL-13 — Touch micro-biometrics (6 features, pure extractor — no new
     // collector / sensor / permission). All zero-defaults for backend
     // backward-compat.
