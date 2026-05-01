@@ -192,6 +192,11 @@ data class BehavioralFeatures(
     // Field reserved for future SMS-OTP flow where user pastes from messages.
     val otpPasted: Boolean = false,
 
+    // FR-CL-11 REQ-01 — GPS spoofing detection. True if last-known location
+    // from any provider has `isFromMockProvider=true`. Returns false if
+    // ACCESS_COARSE_LOCATION not granted — signal silently disabled.
+    val mockLocationDetected: Boolean = false,
+
     // FR-CL-13 — Touch micro-biometrics (6 features, pure extractor — no new
     // collector / sensor / permission). All zero-defaults for backend
     // backward-compat.
