@@ -366,3 +366,112 @@ internal fun computeHesitationCategory(
         else -> "NORMAL"
     }
 }
+
+/**
+ * FR-CL-13 — Touch micro-biometrics (6 features).
+ *
+ * Pure extractor. Derived entirely from raw [TouchEvent]s already collected
+ * by [BehavioralCollector]; does NOT touch the collector / sensor / require
+ * any permission.
+ *
+ * Six signals:
+ *  - tap precision avg + std dev (offset from nearest 50dp grid center)
+ *  - inter-tap velocity avg + std dev (px/ms between consecutive DOWNs)
+ *  - dominantHandSide enum (LEFT / RIGHT / AMBIGUOUS) from x-centroid bias
+ *  - post-DOWN tap jitter (ms to first MOVE event in same tap window)
+ */
+internal data class TouchMicroBiometrics(
+    val avgTapPrecisionOffsetPx: Double,
+    val tapPrecisionStdDev: Double,
+    val avgInterTapVelocityPxPerMs: Double,
+    val interTapVelocityStdDev: Double,
+    val dominantHandSide: String,
+    val tapJitterPostDownMs: Double,
+)
+
+/**
+ * @param touchEvents raw events sorted by timestamp ascending (collector
+ *        order — already chronological in practice but we re-sort defensively)
+ * @param density `displayMetrics.density` for dp→px conversion of the
+ *        50 dp grid cell size used by the precision-offset metric
+ * @param touchCentroidX pre-computed centroid X (already produced by
+ *        [computeTouchEnhanced]); reused so we don't double-iterate
+ * @param screenWidthPx device screen width (collected once at session start)
+ */
+internal fun computeTouchMicroBiometrics(
+    touchEvents: List<TouchEvent>,
+    density: Float,
+    touchCentroidX: Double,
+    screenWidthPx: Int,
+): TouchMicroBiometrics {
+    val downs = touchEvents.filter { it.action == 0 }.sortedBy { it.timestamp }
+    if (downs.isEmpty()) {
+        return TouchMicroBiometrics(0.0, 0.0, 0.0, 0.0, "AMBIGUOUS", 0.0)
+    }
+
+    // REQ-01/02 — tap precision offset from nearest 50dp grid center.
+    val cellPx = (TOUCH_GRID_CELL_DP * density)
+    val offsets: List<Float> = downs.map { ev ->
+        val cx = (kotlin.math.round(ev.x / cellPx) * cellPx) + (cellPx / 2f)
+        val cy = (kotlin.math.round(ev.y / cellPx) * cellPx) + (cellPx / 2f)
+        val dx = ev.x - cx
+        val dy = ev.y - cy
+        kotlin.math.sqrt(dx * dx + dy * dy)
+    }
+    val avgPrecisionOffsetPx = if (offsets.isEmpty()) 0.0 else offsets.map { it.toDouble() }.average()
+    val tapPrecisionStdDev = stdDev(offsets)
+
+    // REQ-03/04 — inter-tap velocity between consecutive DOWN events.
+    val velocities: List<Double> = downs.zipWithNext().mapNotNull { (a, b) ->
+        val dt = (b.timestamp - a.timestamp).toDouble()
+        if (dt <= 0.0) return@mapNotNull null
+        val dx = (b.x - a.x).toDouble()
+        val dy = (b.y - a.y).toDouble()
+        kotlin.math.sqrt(dx * dx + dy * dy) / dt
+    }
+    val avgInterTapVelocity = if (velocities.isEmpty()) 0.0 else velocities.average()
+    val interTapVelocityStdDev = stdDevDouble(velocities)
+
+    // REQ-05 — hand dominance from existing centroid X relative to screen width.
+    val dominantHandSide = if (screenWidthPx <= 0) {
+        "AMBIGUOUS"
+    } else {
+        val ratio = touchCentroidX / screenWidthPx.toDouble()
+        when {
+            ratio > HAND_RIGHT_THRESHOLD -> "RIGHT"
+            ratio < HAND_LEFT_THRESHOLD -> "LEFT"
+            else -> "AMBIGUOUS"
+        }
+    }
+
+    // REQ-06 — post-DOWN tap jitter: ms from each DOWN to the first MOVE
+    // within the same tap window (≤ TAP_WINDOW_MS, position within
+    // TAP_POSITION_TOLERANCE_PX). Empty if user always taps cleanly without
+    // micro-MOVE follow-ups (rare on real skin contact).
+    val moves = touchEvents.filter { it.action == 2 }
+    val jitterDeltas: List<Long> = downs.mapNotNull { down ->
+        val firstMove = moves.firstOrNull { mv ->
+            val dt = mv.timestamp - down.timestamp
+            dt in 1..TAP_WINDOW_MS &&
+                kotlin.math.abs(mv.x - down.x) <= TAP_POSITION_TOLERANCE_PX &&
+                kotlin.math.abs(mv.y - down.y) <= TAP_POSITION_TOLERANCE_PX
+        }
+        firstMove?.let { it.timestamp - down.timestamp }
+    }
+    val tapJitterPostDownMs = if (jitterDeltas.isEmpty()) 0.0 else jitterDeltas.map { it.toDouble() }.average()
+
+    return TouchMicroBiometrics(
+        avgTapPrecisionOffsetPx = avgPrecisionOffsetPx,
+        tapPrecisionStdDev = tapPrecisionStdDev,
+        avgInterTapVelocityPxPerMs = avgInterTapVelocity,
+        interTapVelocityStdDev = interTapVelocityStdDev,
+        dominantHandSide = dominantHandSide,
+        tapJitterPostDownMs = tapJitterPostDownMs,
+    )
+}
+
+private const val TOUCH_GRID_CELL_DP = 50f
+private const val HAND_RIGHT_THRESHOLD = 0.55
+private const val HAND_LEFT_THRESHOLD = 0.45
+private const val TAP_WINDOW_MS = 500L
+private const val TAP_POSITION_TOLERANCE_PX = 20f

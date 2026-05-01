@@ -353,6 +353,14 @@ class BehavioralCollector(private val context: Context) : DefaultLifecycleObserv
         )
         val cognitiveAdv = computeCognitiveAdvanced(base.sortedTextEvents)
 
+        // === FR-CL-13: Touch micro-biometrics (6 features, pure extractor) ===
+        val touchMicro = computeTouchMicroBiometrics(
+            touchEvents = touchSnapshot,
+            density = context.resources.displayMetrics.density,
+            touchCentroidX = touchEnh.touchCentroidX,
+            screenWidthPx = screenWidthValue,
+        )
+
         return BehavioralFeatures(
             sessionDurationMs = endTime - sessionStartTime,
             avgInterCharDelayMs = base.avgInterChar,
@@ -435,6 +443,13 @@ class BehavioralCollector(private val context: Context) : DefaultLifecycleObserv
             screenshotDuringInput = screenshotDetected,
             // FR-CL-10 REQ-13
             decisionTimeOverLimitMs = decisionTimeOverLimitMs,
+            // FR-CL-13 — Touch micro-biometrics
+            avgTapPrecisionOffsetPx = touchMicro.avgTapPrecisionOffsetPx,
+            tapPrecisionStdDev = touchMicro.tapPrecisionStdDev,
+            avgInterTapVelocityPxPerMs = touchMicro.avgInterTapVelocityPxPerMs,
+            interTapVelocityStdDev = touchMicro.interTapVelocityStdDev,
+            dominantHandSide = touchMicro.dominantHandSide,
+            tapJitterPostDownMs = touchMicro.tapJitterPostDownMs,
         )
     }
 
