@@ -12,9 +12,6 @@ package com.poc.behavioralfraud.ui.navigation
  *  - slash-separated for grouped flows (`transfer/form`, `dev/profile`)
  */
 object AppRoutes {
-    // ── Auth (TASK-016) ────────────────────────────────────────────────
-    const val LOGIN = "login"
-
     // ── Top-level (production-feel) ───────────────────────────────────
     const val HOME = "home"
 

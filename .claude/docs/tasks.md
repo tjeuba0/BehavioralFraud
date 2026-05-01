@@ -333,7 +333,7 @@ ProfileMetric("Gyro stability", String.format("%.6f", avgGyro), "Trung bình 3 t
 | TASK-013 | Foundation components (Toggle/Selection/Tabs/Badges) | FR-CL-08 (REQ-18..22) | P1 | planned | TASK-010 |
 | TASK-014 | Design System Preview screen | FR-CL-08 (REQ-23) | P1 | planned | TASK-011, 012, 013 |
 | TASK-015 | NavHost migration (replace `when (currentScreen)` switch-case in MainActivity:30) | FR-CL-10 (REQ-09) | P0 | planned | TASK-011 |
-| TASK-016 | Login screen + PinDots + NumericKeypad + biometric | FR-CL-09 (REQ-01..05) | P0 | planned | TASK-011, 015 |
+| TASK-016 | ~~Login screen + PinDots + NumericKeypad + biometric~~ — **DROPPED** (no Figma reference, login not in behavioral session, doesn't add demo value) | FR-CL-09 | — | dropped | — |
 | TASK-017 | HomeIPayScreen rewrite — strip enrollment UI + dev affordance | FR-CL-10 (REQ-01) | P0 | planned | TASK-013, 015 |
 | TASK-018 | TransferTypeScreen + RecipientScreen | FR-CL-10 (REQ-02, 03) | P0 | planned | TASK-011, 017 |
 | TASK-019 | TransferFormScreen rewrite + TransferOrchestratorViewModel | FR-CL-10 (REQ-04, 08) | P0 | planned | TASK-018 |
