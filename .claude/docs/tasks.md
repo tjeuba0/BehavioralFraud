@@ -346,8 +346,8 @@ ProfileMetric("Gyro stability", String.format("%.6f", avgGyro), "Trung bình 3 t
 | TASK-026 | mockLocationDetected — GPS spoofing fraud signal | FR-CL-11 (REQ-01) | P1 | done | none |
 | TASK-027 | Extended sensor coverage (magnetometer + light + proximity + linear-accel + rotation-vector) | FR-CL-12 (REQ-01..12) | P1 | done | none |
 | TASK-028 | Touch micro-biometrics (tap precision + inter-tap velocity + hand dominance + tap jitter) | FR-CL-13 (REQ-01..06) | P1 | done | none |
-| TASK-029 | Dev Menu Session Inspector — surface 21 fields (FR-CL-10/11/12/13) | FR-CL-14 (REQ-01..06) | P1 | review | TASK-026, 027, 028 |
-| TASK-030 | LocalScorer fallback rules — mirror BE TASK-015 RiskRuleEngine | FR-CL-15 | P1 | planned | TASK-026, 027, 028 + BE TASK-015 |
+| TASK-029 | Dev Menu Session Inspector — surface 21 fields (FR-CL-10/11/12/13) | FR-CL-14 (REQ-01..06) | P1 | done | TASK-026, 027, 028 |
+| TASK-030 | LocalScorer fallback rules — mirror BE TASK-015 RiskRuleEngine | FR-CL-15 | P1 | review | TASK-026, 027, 028 + BE TASK-015 |
 | TASK-031 | E2E acceptance test — fraud scenario verify pipeline | FR-CL-16 | P2 | planned | TASK-029, 030 |
 
 ---
