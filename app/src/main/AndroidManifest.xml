@@ -3,6 +3,11 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- TASK-026 / FR-CL-11 REQ-01: required to read last-known location's
+         isFromMockProvider() flag for GPS-spoofing fraud signal. Used
+         READ-ONLY (never requestLocationUpdates). Collector degrades
+         gracefully if user denies — feature returns false. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
     <application
         android:allowBackup="true"
